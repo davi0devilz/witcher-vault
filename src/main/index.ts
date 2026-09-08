@@ -5,6 +5,7 @@ import { initDatabase, persist } from './db'
 import { registerIpcHandlers } from './ipc'
 import { getArtworkCacheDir } from './services/artworkCache'
 import { setSessionUpdateListener } from './services/sessionTracker'
+import { setUpdateEventListener } from './services/updateService'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 
 // Electron derives the userData storage folder from the app name by default.
@@ -81,6 +82,10 @@ app.whenReady().then(async () => {
 
   setSessionUpdateListener((update) => {
     mainWindow?.webContents.send(IPC_CHANNELS.GAME_SESSION_UPDATE, update)
+  })
+
+  setUpdateEventListener((update) => {
+    mainWindow?.webContents.send(IPC_CHANNELS.UPDATE_EVENT, update)
   })
 
   app.on('activate', () => {

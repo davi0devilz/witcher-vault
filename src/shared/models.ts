@@ -107,3 +107,11 @@ export interface TranslateDescriptionResult {
   detailedDescription: string | null
   message?: string
 }
+
+export type UpdateEvent =
+  | { type: 'checking-for-update' }
+  | { type: 'update-available'; version: string }
+  | { type: 'update-not-available' }
+  | { type: 'download-progress'; percent: number }
+  | { type: 'update-downloaded'; version: string }
+  | { type: 'error'; message: string }

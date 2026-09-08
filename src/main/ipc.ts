@@ -23,6 +23,7 @@ import {
 } from './services/coverPickerService'
 import { launchGame } from './services/sessionTracker'
 import { translateToArabic } from './services/translationService'
+import { checkForUpdates, installUpdate, startDownloadUpdate } from './services/updateService'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 import type { GameDetail, TranslateDescriptionResult } from '../shared/models'
 
@@ -174,4 +175,10 @@ export function registerIpcHandlers(): void {
     shell.openExternal(url)
     return true
   })
+
+  ipcMain.handle(IPC_CHANNELS.UPDATE_CHECK, () => checkForUpdates())
+
+  ipcMain.handle(IPC_CHANNELS.UPDATE_START_DOWNLOAD, () => startDownloadUpdate())
+
+  ipcMain.handle(IPC_CHANNELS.UPDATE_INSTALL, () => installUpdate())
 }

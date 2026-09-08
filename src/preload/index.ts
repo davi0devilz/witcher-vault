@@ -7,7 +7,8 @@ import type {
   GameDetail,
   ScanReport,
   SessionUpdate,
-  TranslateDescriptionResult
+  TranslateDescriptionResult,
+  UpdateEvent
 } from '../shared/models'
 
 interface LaunchResult {
@@ -71,6 +72,17 @@ const api = {
   shell: {
     openExternal: (url: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.SHELL_OPEN_EXTERNAL, url)
+  },
+  updater: {
+    checkForUpdates: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_CHECK),
+    startDownload: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_START_DOWNLOAD),
+    installUpdate: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_INSTALL),
+    onUpdateEvent: (callback: (event: UpdateEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, update: UpdateEvent): void =>
+        callback(update)
+      ipcRenderer.on(IPC_CHANNELS.UPDATE_EVENT, listener)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.UPDATE_EVENT, listener)
+    }
   }
 }
 

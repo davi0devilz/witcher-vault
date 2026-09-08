@@ -20,5 +20,9 @@ export const IPC_CHANNELS = {
   HERO_SET_FROM_FILE: 'hero:set-from-file',
   GAME_UPDATE_NOTES: 'game:update-notes',
   GAME_TRANSLATE_DESCRIPTION: 'game:translate-description',
-  SHELL_OPEN_EXTERNAL: 'shell:open-external'
+  SHELL_OPEN_EXTERNAL: 'shell:open-external',
+  UPDATE_CHECK: 'update:check-for-updates',
+  UPDATE_START_DOWNLOAD: 'update:start-download-update',
+  UPDATE_INSTALL: 'update:install-update',
+  UPDATE_EVENT: 'update:event'
 } as const

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { UpdateEvent } from '../../../shared/models'
 import {
   applyFontSize,
   FONT_SIZE_META_KEY,
@@ -14,12 +15,23 @@ const FONT_SIZE_OPTIONS: Array<{ value: FontSizeOption; label: string }> = [
   { value: 'large', label: 'كبير' }
 ]
 
+type UpdateState =
+  | { phase: 'idle' }
+  | { phase: 'checking' }
+  | { phase: 'up-to-date' }
+  | { phase: 'available'; version: string }
+  | { phase: 'downloading'; version: string; percent: number }
+  | { phase: 'downloaded'; version: string }
+  | { phase: 'error'; message: string }
+
 export default function Settings(): JSX.Element {
   const [apiKey, setApiKey] = useState('')
   const [savedKey, setSavedKey] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [fontSize, setFontSize] = useState<FontSizeOption>('medium')
+  const [appVersion, setAppVersion] = useState('')
+  const [updateState, setUpdateState] = useState<UpdateState>({ phase: 'idle' })
 
   useEffect(() => {
     let cancelled = false
@@ -42,6 +54,55 @@ export default function Settings(): JSX.Element {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    window.api.getAppVersion().then(setAppVersion)
+  }, [])
+
+  useEffect(() => {
+    return window.api.updater.onUpdateEvent((event: UpdateEvent) => {
+      setUpdateState((prev) => {
+        switch (event.type) {
+          case 'checking-for-update':
+            return { phase: 'checking' }
+          case 'update-available':
+            return { phase: 'available', version: event.version }
+          case 'update-not-available':
+            return { phase: 'up-to-date' }
+          case 'download-progress': {
+            let version = ''
+            if (prev.phase === 'downloading' || prev.phase === 'available') version = prev.version
+            return { phase: 'downloading', version, percent: event.percent }
+          }
+          case 'update-downloaded':
+            return { phase: 'downloaded', version: event.version }
+          case 'error':
+            return { phase: 'error', message: event.message }
+          default:
+            return prev
+        }
+      })
+    })
+  }, [])
+
+  async function handleCheckForUpdates(): Promise<void> {
+    setUpdateState({ phase: 'checking' })
+    await window.api.updater.checkForUpdates()
+  }
+
+  async function handleStartDownload(): Promise<void> {
+    if (updateState.phase !== 'available') return
+    setUpdateState({ phase: 'downloading', version: updateState.version, percent: 0 })
+    await window.api.updater.startDownload()
+  }
+
+  function handleDismissUpdate(): void {
+    setUpdateState({ phase: 'idle' })
+  }
+
+  async function handleInstallUpdate(): Promise<void> {
+    await window.api.updater.installUpdate()
+  }
 
   async function handleFontSizeChange(size: FontSizeOption): Promise<void> {
     setFontSize(size)
@@ -144,6 +205,93 @@ export default function Settings(): JSX.Element {
             <li>5. انسخ الرمز والصقه هنا في البرنامج.</li>
           </ol>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-base-border bg-base-surface p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-tajawal text-sm font-bold text-white">التحديثات</h3>
+            <p className="mt-1 text-xs leading-relaxed text-white/45">
+              الإصدار الحالي: <span className="text-white/60">v{appVersion || '—'}</span>
+            </p>
+          </div>
+          {updateState.phase !== 'available' &&
+            updateState.phase !== 'downloading' &&
+            updateState.phase !== 'downloaded' && (
+              <button
+                type="button"
+                onClick={handleCheckForUpdates}
+                disabled={updateState.phase === 'checking'}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {updateState.phase === 'checking' ? 'جارٍ التحقق...' : 'التحقق من وجود تحديثات'}
+              </button>
+            )}
+        </div>
+
+        {updateState.phase === 'up-to-date' && (
+          <p className="mt-3 text-xs text-emerald-400/80">✓ التطبيق محدّث لأحدث إصدار.</p>
+        )}
+
+        {updateState.phase === 'error' && (
+          <p className="mt-3 text-xs text-red-400/80">تعذّر التحقق من التحديثات: {updateState.message}</p>
+        )}
+
+        {updateState.phase === 'available' && (
+          <div className="mt-4 rounded-xl border border-accent/40 bg-accent/10 p-4">
+            <p className="text-sm font-bold text-white">
+              يتوفر إصدار جديد: <span className="text-accent-soft">v{updateState.version}</span>
+            </p>
+            <p className="mt-1 text-xs text-white/50">
+              يمكنك تحميل التحديث الآن أو تجاهله والمتابعة لاحقاً.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={handleStartDownload}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-accent-soft"
+              >
+                تحديث الآن
+              </button>
+              <button
+                type="button"
+                onClick={handleDismissUpdate}
+                className="rounded-lg border border-base-border bg-base-elevated px-4 py-2 text-sm font-bold text-white/60 transition-colors duration-200 hover:text-white"
+              >
+                لاحقاً / تجاهل
+              </button>
+            </div>
+          </div>
+        )}
+
+        {updateState.phase === 'downloading' && (
+          <div className="mt-4 rounded-xl border border-accent/40 bg-accent/10 p-4">
+            <p className="text-sm font-bold text-white">جارِ تحميل التحديث...</p>
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-base-elevated">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-200"
+                style={{ width: `${Math.round(updateState.percent)}%` }}
+              />
+            </div>
+            <p className="mt-1.5 text-xs text-white/50">{Math.round(updateState.percent)}%</p>
+          </div>
+        )}
+
+        {updateState.phase === 'downloaded' && (
+          <div className="mt-4 rounded-xl border border-accent/40 bg-accent/10 p-4">
+            <p className="text-sm font-bold text-white">
+              تم تحميل الإصدار <span className="text-accent-soft">v{updateState.version}</span> بنجاح.
+            </p>
+            <p className="mt-1 text-xs text-white/50">أعد تشغيل التطبيق لإكمال التثبيت.</p>
+            <button
+              type="button"
+              onClick={handleInstallUpdate}
+              className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-accent-soft"
+            >
+              إعادة التشغيل والتثبيت
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
