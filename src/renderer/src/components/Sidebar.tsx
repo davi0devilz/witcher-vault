@@ -87,6 +87,7 @@ export default function Sidebar(): JSX.Element {
             </button>
           ))}
         </div>
+        <p className="text-[11px] text-white/50">صُنع بـ ❤️ بواسطة Davi</p>
         <p className="text-[11px] leading-relaxed text-white/25">Witcher Vault — الإصدار 0.1.0</p>
       </div>
     </aside>
