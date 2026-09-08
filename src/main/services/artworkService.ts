@@ -1,19 +1,8 @@
 import type { ArtworkBatchResult, ArtworkOutcome, Game } from '../../shared/models'
 import { getAllGamesWithSources, updateGameArtwork } from '../db'
 import { artworkFileExists, downloadImageToCache } from './artworkCache'
-import { fetchSteamAppMetadata } from './steamMetadataApi'
-
-const coverCandidates = (appId: string): string[] => [
-  `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`,
-  `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`,
-  `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`
-]
-
-const heroCandidates = (appId: string): string[] => [
-  `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_hero.jpg`,
-  `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
-  `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_hero.jpg`
-]
+import { getCoverOptions, getHeroOptions } from './coverPickerService'
+import { fetchSteamAppMetadata, fetchSteamStoreImages } from './steamMetadataApi'
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -42,10 +31,24 @@ export async function fetchArtworkForGame(game: Game, forceRefresh = false): Pro
     return { gameId: game.id, title: game.title, status: 'skipped' }
   }
 
-  const [coverOk, heroOk, metadata] = await Promise.all([
-    downloadFirstAvailable(coverCandidates(appId), coverFileName),
-    downloadFirstAvailable(heroCandidates(appId), heroFileName),
+  // Sourced from the same options the manual cover/hero picker offers (Steam's
+  // legacy CDN guesses, the real header_image from appdetails, and SteamGridDB)
+  // plus screenshots as a last resort — very recently released games often
+  // have nothing at all on Steam's legacy flat-file CDN paths, so relying on
+  // those alone left new titles with a broken/missing background.
+  const [coverOptions, heroOptions, storeImages, metadata] = await Promise.all([
+    getCoverOptions(appId),
+    getHeroOptions(appId),
+    fetchSteamStoreImages(appId),
     fetchSteamAppMetadata(appId)
+  ])
+
+  const coverCandidates = coverOptions.options.map((o) => o.url)
+  const heroCandidates = [...heroOptions.map((o) => o.url), ...(storeImages?.screenshots ?? [])]
+
+  const [coverOk, heroOk] = await Promise.all([
+    downloadFirstAvailable(coverCandidates, coverFileName),
+    downloadFirstAvailable(heroCandidates, heroFileName)
   ])
 
   updateGameArtwork(game.id, {

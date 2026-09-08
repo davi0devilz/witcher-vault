@@ -59,6 +59,7 @@ export default function GameDetail(): JSX.Element {
   const [hltb, setHltb] = useState<HltbResult | null>(null)
   const [pricing, setPricing] = useState<RegionalPricingResult | null>(null)
   const [isInstalling, setIsInstalling] = useState(false)
+  const [heroFailed, setHeroFailed] = useState(false)
 
   const loadGame = useCallback(async () => {
     if (!Number.isFinite(gameId)) {
@@ -129,6 +130,47 @@ export default function GameDetail(): JSX.Element {
       cancelled = true
     }
   }, [steamAppId])
+
+  useEffect(() => {
+    if (!game || game.artworkStatus !== 'pending') return
+    let cancelled = false
+    window.api.game
+      .fetchArtwork(game.id)
+      .then((detail) => {
+        if (!cancelled && detail) setGame(detail)
+      })
+      .catch(() => {
+        // Artwork is best-effort — never surfaced as an error.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [game?.id, game?.artworkStatus])
+
+  useEffect(() => {
+    setHeroFailed(false)
+  }, [game?.heroPath])
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent): void {
+      if (e.key === 'Escape' && !isCoverModalOpen) {
+        navigate(-1)
+      }
+    }
+    // button 3 is the side "back" thumb button most mice ship with.
+    function handleMouseUp(e: MouseEvent): void {
+      if (e.button === 3 && !isCoverModalOpen) {
+        e.preventDefault()
+        navigate(-1)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [navigate, isCoverModalOpen])
 
   async function handleLaunch(): Promise<void> {
     setIsLaunching(true)
@@ -221,11 +263,20 @@ export default function GameDetail(): JSX.Element {
   return (
     <div className="flex flex-col gap-6 pb-10">
       <section className="relative -mx-8 -mt-8 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="absolute right-4 top-4 z-10 flex items-center gap-1.5 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm font-bold text-white backdrop-blur transition-colors duration-200 hover:bg-black/60"
+        >
+          → رجوع
+        </button>
+
         <div className="relative aspect-[21/9] w-full">
-          {game.heroPath ? (
+          {game.heroPath && !heroFailed ? (
             <img
               src={`app-artwork://local/${game.heroPath}`}
               alt={game.title}
+              onError={() => setHeroFailed(true)}
               className="h-full w-full object-cover"
             />
           ) : (

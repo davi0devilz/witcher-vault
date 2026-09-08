@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { SteamSearchResultItem } from '../../../shared/models'
+import FallbackPoster from '../components/FallbackPoster'
 
 export default function SteamExplorer(): JSX.Element {
   const navigate = useNavigate()
@@ -73,7 +74,7 @@ export default function SteamExplorer(): JSX.Element {
       )}
 
       {results.length > 0 && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {results.map((item) => (
             <button
               key={item.appId}
@@ -82,37 +83,62 @@ export default function SteamExplorer(): JSX.Element {
               disabled={openingAppId === item.appId}
               className="group flex flex-col overflow-hidden rounded-xl border border-base-border bg-base-surface text-right transition-transform duration-300 ease-out hover:-translate-y-1 hover:shadow-glow disabled:cursor-wait disabled:opacity-70 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
             >
-              <div className="relative aspect-[460/215] w-full bg-base-elevated">
-                {item.tinyImage ? (
-                  <img
-                    src={item.tinyImage}
-                    alt={item.name}
-                    loading="lazy"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-2xl">🎮</div>
-                )}
+              <div className="relative aspect-[2/3] w-full bg-base-elevated">
+                <SteamPosterImage appId={item.appId} tinyImage={item.tinyImage} name={item.name} />
                 {openingAppId === item.appId && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-white">
                     جارِ الفتح...
                   </div>
                 )}
               </div>
-              <div className="flex flex-1 flex-col gap-1 p-3">
+              <div className="flex flex-1 flex-col gap-1 p-2.5">
                 <h3 className="line-clamp-2 font-tajawal text-xs font-bold text-white">
                   {item.name}
                 </h3>
-                {item.priceFinal !== null && (
-                  <span className="text-[11px] text-white/50">
-                    {item.priceFinal.toFixed(2)} {item.priceCurrency}
-                  </span>
-                )}
+                <span className="text-[11px] font-medium text-accent">
+                  {item.priceFinal === null
+                    ? '—'
+                    : item.priceFinal === 0
+                      ? 'مجاني'
+                      : `${item.priceFinal.toFixed(2)} ${item.priceCurrency ?? ''}`}
+                </span>
               </div>
             </button>
           ))}
         </div>
       )}
     </div>
+  )
+}
+
+function SteamPosterImage({
+  appId,
+  tinyImage,
+  name
+}: {
+  appId: string
+  tinyImage: string | null
+  name: string
+}): JSX.Element {
+  const candidates = [
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`,
+    ...(tinyImage ? [tinyImage] : [])
+  ]
+  const [candidateIndex, setCandidateIndex] = useState(0)
+
+  if (candidateIndex >= candidates.length) {
+    return <FallbackPoster title={name} />
+  }
+
+  return (
+    <img
+      src={candidates[candidateIndex]}
+      alt={name}
+      loading="lazy"
+      onError={() => setCandidateIndex((i) => i + 1)}
+      className="h-full w-full object-cover"
+    />
   )
 }

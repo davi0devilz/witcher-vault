@@ -5,6 +5,17 @@ import { getMeta, setGameCover, setGameHero } from '../db'
 import { downloadImageToCache, getArtworkCacheDir } from './artworkCache'
 import { fetchSteamStoreImages } from './steamMetadataApi'
 
+// A shared, app-level SteamGridDB key so community cover/hero art works out
+// of the box — SteamGridDB keys only grant read access to its public image
+// database, never to any user account. Settings lets a user override it with
+// their own free key if they prefer.
+const DEFAULT_STEAMGRIDDB_KEY = '71a4cabf8966b9f3451670303186b228'
+
+export function getEffectiveSteamGridDbKey(): string {
+  const custom = getMeta('steamgriddb_api_key')
+  return custom && custom.trim() ? custom.trim() : DEFAULT_STEAMGRIDDB_KEY
+}
+
 interface SteamGridDbImage {
   id: number
   url: string
@@ -76,25 +87,22 @@ export async function getCoverOptions(appId: string): Promise<CoverOptionsResult
     }
   ]
 
-  const apiKey = getMeta('steamgriddb_api_key')
-  const steamGridDbConfigured = Boolean(apiKey)
-  if (apiKey) {
-    const grids = await fetchSteamGridDbImages('grids', appId, apiKey, '600x900')
-    options.push(
-      ...grids
-        .filter((g) => isPortrait2to3(g.width, g.height))
-        .slice(0, 16)
-        .map((g) => ({
-          id: `sgdb-grid-${g.id}`,
-          url: g.url,
-          source: 'steamgriddb' as const,
-          width: g.width,
-          height: g.height
-        }))
-    )
-  }
+  const apiKey = getEffectiveSteamGridDbKey()
+  const grids = await fetchSteamGridDbImages('grids', appId, apiKey, '600x900')
+  options.push(
+    ...grids
+      .filter((g) => isPortrait2to3(g.width, g.height))
+      .slice(0, 16)
+      .map((g) => ({
+        id: `sgdb-grid-${g.id}`,
+        url: g.url,
+        source: 'steamgriddb' as const,
+        width: g.width,
+        height: g.height
+      }))
+  )
 
-  return { options, steamGridDbConfigured }
+  return { options, steamGridDbConfigured: true }
 }
 
 /**
@@ -120,34 +128,32 @@ export async function getHeroOptions(appId: string): Promise<CoverOption[]> {
     options.push({ id: 'steam-header', url: storeImages.headerImage, source: 'steam', width: null, height: null })
   }
 
-  const apiKey = getMeta('steamgriddb_api_key')
-  if (apiKey) {
-    const [heroes, wideGrids] = await Promise.all([
-      fetchSteamGridDbImages('heroes', appId, apiKey, '1920x620'),
-      fetchSteamGridDbImages('grids', appId, apiKey, '920x430,460x215')
-    ])
+  const apiKey = getEffectiveSteamGridDbKey()
+  const [heroes, wideGrids] = await Promise.all([
+    fetchSteamGridDbImages('heroes', appId, apiKey, '1920x620'),
+    fetchSteamGridDbImages('grids', appId, apiKey, '920x430,460x215')
+  ])
 
-    options.push(
-      ...heroes
-        .filter((h) => isWideBanner(h.width, h.height))
-        .map((h) => ({
-          id: `sgdb-hero-${h.id}`,
-          url: h.url,
-          source: 'steamgriddb' as const,
-          width: h.width,
-          height: h.height
-        })),
-      ...wideGrids
-        .filter((g) => isWideBanner(g.width, g.height))
-        .map((g) => ({
-          id: `sgdb-widegrid-${g.id}`,
-          url: g.url,
-          source: 'steamgriddb' as const,
-          width: g.width,
-          height: g.height
-        }))
-    )
-  }
+  options.push(
+    ...heroes
+      .filter((h) => isWideBanner(h.width, h.height))
+      .map((h) => ({
+        id: `sgdb-hero-${h.id}`,
+        url: h.url,
+        source: 'steamgriddb' as const,
+        width: h.width,
+        height: h.height
+      })),
+    ...wideGrids
+      .filter((g) => isWideBanner(g.width, g.height))
+      .map((g) => ({
+        id: `sgdb-widegrid-${g.id}`,
+        url: g.url,
+        source: 'steamgriddb' as const,
+        width: g.width,
+        height: g.height
+      }))
+  )
 
   return options
 }

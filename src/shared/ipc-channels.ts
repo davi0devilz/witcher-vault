@@ -7,6 +7,7 @@ export const IPC_CHANNELS = {
   LIBRARY_GET_GAMES: 'library:get-games',
   LIBRARY_REMOVE_GAME: 'library:remove-game',
   ARTWORK_FETCH_LIBRARY: 'artwork:fetch-library',
+  ARTWORK_FETCH_FOR_GAME: 'artwork:fetch-for-game',
   GAME_GET_DETAIL: 'game:get-detail',
   GAME_TOGGLE_FAVORITE: 'game:toggle-favorite',
   GAME_OPEN_INSTALL_FOLDER: 'game:open-install-folder',

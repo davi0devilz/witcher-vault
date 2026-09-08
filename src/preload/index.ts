@@ -56,7 +56,9 @@ const api = {
     updateNotes: (gameId: number, notes: string): Promise<string> =>
       ipcRenderer.invoke(IPC_CHANNELS.GAME_UPDATE_NOTES, gameId, notes),
     translateDescription: (gameId: number): Promise<TranslateDescriptionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.GAME_TRANSLATE_DESCRIPTION, gameId)
+      ipcRenderer.invoke(IPC_CHANNELS.GAME_TRANSLATE_DESCRIPTION, gameId),
+    fetchArtwork: (gameId: number): Promise<GameDetail | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ARTWORK_FETCH_FOR_GAME, gameId)
   },
   cover: {
     getOptions: (appId: string): Promise<{ options: CoverOption[]; steamGridDbConfigured: boolean }> =>

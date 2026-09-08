@@ -18,6 +18,7 @@ interface SteamAppDetailsEntry {
     developers?: string[]
     publishers?: string[]
     header_image?: string
+    screenshots?: Array<{ path_full?: string }>
   }
 }
 
@@ -89,19 +90,23 @@ export async function fetchSteamAppMetadata(appId: string): Promise<SteamAppMeta
 
 export interface SteamStoreImages {
   headerImage: string | null
+  screenshots: string[]
 }
 
 /**
  * Fetches the official header image Steam ships for an AppID — used as a
- * hero/banner fallback alongside library_hero.jpg. Deliberately does not
- * expose screenshots: those are gameplay captures, not banner artwork, and
- * would look out of place stretched across a hero slot.
+ * hero/banner fallback alongside library_hero.jpg. `screenshots` is
+ * deliberately never offered as a choice in the manual cover/hero picker
+ * (they're gameplay captures, not banner artwork) — it exists only so the
+ * automatic background-fetch pipeline has a last-resort fallback for very
+ * new games whose official banner assets aren't on Steam's legacy CDN yet.
  */
 export async function fetchSteamStoreImages(appId: string): Promise<SteamStoreImages | null> {
   const data = await requestAppDetails(appId, 'english')
   if (!data) return null
 
   return {
-    headerImage: data.header_image ?? null
+    headerImage: data.header_image ?? null,
+    screenshots: (data.screenshots ?? []).map((s) => s.path_full).filter((url): url is string => Boolean(url))
   }
 }

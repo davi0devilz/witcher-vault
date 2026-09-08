@@ -105,6 +105,12 @@ export default function Library(): JSX.Element {
     })
 
     const sorted = [...filtered].sort((a, b) => {
+      // Installed games always anchor the top of the grid — owned-but-uninstalled
+      // cloud entries never crowd out what the user can actually play right now.
+      const installedRank = (g: Game): number => (g.installStatus === 'installed' ? 0 : 1)
+      const installedDiff = installedRank(a) - installedRank(b)
+      if (installedDiff !== 0) return installedDiff
+
       switch (sortMode) {
         case 'playtime':
           return b.playtimeMinutes - a.playtimeMinutes
@@ -268,6 +274,7 @@ function GameCard({ game }: { game: Game }): JSX.Element {
   const hours = Math.floor(game.playtimeMinutes / 60)
   const primaryGenre = game.genres[0] ?? null
   const isNotInstalled = game.installStatus === 'not_installed'
+  const [coverFailed, setCoverFailed] = useState(false)
 
   return (
     <Link
@@ -282,11 +289,12 @@ function GameCard({ game }: { game: Game }): JSX.Element {
             : 'h-full w-full'
         }
       >
-        {game.coverPath ? (
+        {game.coverPath && !coverFailed ? (
           <img
             src={`app-artwork://local/${game.coverPath}`}
             alt={game.title}
             loading="lazy"
+            onError={() => setCoverFailed(true)}
             className="h-full w-full object-cover"
           />
         ) : (

@@ -13,7 +13,7 @@ import {
   updateGameNotes
 } from './db'
 import { runFullScan } from './scanners'
-import { fetchArtworkForLibrary } from './services/artworkService'
+import { fetchArtworkForGame, fetchArtworkForLibrary } from './services/artworkService'
 import {
   getCoverOptions,
   getHeroOptions,
@@ -97,6 +97,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.ARTWORK_FETCH_LIBRARY, (_event, forceRefresh: unknown) =>
     fetchArtworkForLibrary(forceRefresh === true)
   )
+
+  ipcMain.handle(IPC_CHANNELS.ARTWORK_FETCH_FOR_GAME, async (_event, gameId: number) => {
+    const game = getGameWithSourcesById(gameId)
+    if (!game) return null
+    await fetchArtworkForGame(game)
+    return getGameDetail(gameId)
+  })
 
   ipcMain.handle(IPC_CHANNELS.GAME_GET_DETAIL, (_event, gameId: number) => getGameDetail(gameId))
 
