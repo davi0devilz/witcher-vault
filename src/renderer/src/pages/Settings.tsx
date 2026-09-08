@@ -6,6 +6,7 @@ import {
   isFontSizeOption,
   type FontSizeOption
 } from '../lib/fontSize'
+import { applyTheme, isThemeOption, THEME_META_KEY, type ThemeOption } from '../lib/theme'
 
 const STEAMGRIDDB_KEY_META_KEY = 'steamgriddb_api_key'
 const STEAM_API_KEY_META_KEY = 'steam_api_key'
@@ -15,6 +16,11 @@ const FONT_SIZE_OPTIONS: Array<{ value: FontSizeOption; label: string }> = [
   { value: 'small', label: 'صغير' },
   { value: 'medium', label: 'متوسط' },
   { value: 'large', label: 'كبير' }
+]
+
+const THEME_OPTIONS: Array<{ value: ThemeOption; label: string; description: string }> = [
+  { value: 'oled', label: 'OLED أسود نقي', description: 'خلفيات #000000 — الافتراضي' },
+  { value: 'classic', label: 'الثيم السابق', description: 'الرمادي الداكن بلمسة بنفسجية' }
 ]
 
 type UpdateState =
@@ -32,6 +38,7 @@ export default function Settings(): JSX.Element {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [fontSize, setFontSize] = useState<FontSizeOption>('medium')
+  const [theme, setTheme] = useState<ThemeOption>('oled')
   const [appVersion, setAppVersion] = useState('')
   const [updateState, setUpdateState] = useState<UpdateState>({ phase: 'idle' })
 
@@ -46,16 +53,19 @@ export default function Settings(): JSX.Element {
     let cancelled = false
 
     async function loadSettings(): Promise<void> {
-      const [value, storedFontSize, storedSteamProfile, storedSteamApiKey] = await Promise.all([
-        window.api.db.getMeta(STEAMGRIDDB_KEY_META_KEY),
-        window.api.db.getMeta(FONT_SIZE_META_KEY),
-        window.api.db.getMeta(STEAM_PROFILE_INPUT_META_KEY),
-        window.api.db.getMeta(STEAM_API_KEY_META_KEY)
-      ])
+      const [value, storedFontSize, storedTheme, storedSteamProfile, storedSteamApiKey] =
+        await Promise.all([
+          window.api.db.getMeta(STEAMGRIDDB_KEY_META_KEY),
+          window.api.db.getMeta(FONT_SIZE_META_KEY),
+          window.api.db.getMeta(THEME_META_KEY),
+          window.api.db.getMeta(STEAM_PROFILE_INPUT_META_KEY),
+          window.api.db.getMeta(STEAM_API_KEY_META_KEY)
+        ])
       if (!cancelled) {
         setSavedKey(value)
         setApiKey(value ?? '')
         if (isFontSizeOption(storedFontSize)) setFontSize(storedFontSize)
+        if (isThemeOption(storedTheme)) setTheme(storedTheme)
         setSteamProfileInput(storedSteamProfile ?? '')
         setSteamApiKey(storedSteamApiKey ?? '')
         setIsLoading(false)
@@ -138,6 +148,12 @@ export default function Settings(): JSX.Element {
     await window.api.db.setMeta(FONT_SIZE_META_KEY, size)
   }
 
+  async function handleThemeChange(next: ThemeOption): Promise<void> {
+    setTheme(next)
+    applyTheme(next)
+    await window.api.db.setMeta(THEME_META_KEY, next)
+  }
+
   async function handleSave(): Promise<void> {
     setIsSaving(true)
     try {
@@ -157,8 +173,33 @@ export default function Settings(): JSX.Element {
 
       <div className="flex flex-col gap-4">
         <SettingRow title="اللغة والاتجاه" value="العربية — من اليمين لليسار" />
-        <SettingRow title="الثيم" value="داكن سينمائي" />
         <SettingRow title="مكان قاعدة البيانات" value="مجلد بيانات المستخدم (userData)" />
+      </div>
+
+      <div className="rounded-2xl border border-base-border bg-base-surface p-5">
+        <h3 className="font-tajawal text-sm font-bold text-white">المظهر</h3>
+        <p className="mt-1 text-xs leading-relaxed text-white/45">
+          يتحكم في ألوان خلفيات التطبيق بالكامل — OLED الأسود النقي هو الافتراضي لتوفير الطاقة
+          وتباين أعلى على شاشات OLED.
+        </p>
+        <div className="mt-3 flex gap-2">
+          {THEME_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => handleThemeChange(opt.value)}
+              className={[
+                'flex-1 rounded-xl border px-4 py-2.5 text-right transition-colors duration-200',
+                theme === opt.value
+                  ? 'border-accent bg-accent/15 text-white'
+                  : 'border-base-border bg-base-elevated text-white/60 hover:border-accent/40 hover:text-white'
+              ].join(' ')}
+            >
+              <span className="block text-sm font-bold">{opt.label}</span>
+              <span className="mt-0.5 block text-[11px] text-white/40">{opt.description}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-base-border bg-base-surface p-5">

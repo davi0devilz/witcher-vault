@@ -21,6 +21,7 @@ interface SteamGridDbImage {
   url: string
   width: number
   height: number
+  style?: string
 }
 
 interface SteamGridDbResponse {
@@ -107,43 +108,60 @@ export async function getCoverOptions(appId: string): Promise<CoverOptionsResult
 
 /**
  * Hero (wide banner) choices — kept entirely separate from cover options.
- * Only genuine banner artwork is offered here: Steam's own library_hero.jpg
- * and header.jpg, plus SteamGridDB's dedicated "heroes" (1920x620) and wide
- * "grids" (920x430 / 460x215) endpoints. Gameplay screenshots are
- * deliberately excluded — they're captures, not banner art.
+ * SteamGridDB's dedicated "heroes" artwork comes first: it's purpose-made
+ * background art at 1920x620 up to 3840x1240, versus Steam's own
+ * header.jpg/library_hero.jpg which look soft once stretched full-bleed
+ * across a hero section. "alternate"-style heroes (textless art) are ranked
+ * above "material" (which usually bakes in the game's logo), then by
+ * resolution. Steam's own images and SteamGridDB's smaller wide "grids"
+ * (920x430 / 460x215) remain afterward as the safe fallback chain when
+ * SteamGridDB has nothing for an unrecognized/unlisted title — the download
+ * step (fetchArtworkForGame) always walks this list in order and takes the
+ * first URL that actually downloads, so nothing here can produce an empty
+ * hero slot on its own. Gameplay screenshots are deliberately excluded from
+ * this list — they're captures, not banner art.
  */
 export async function getHeroOptions(appId: string): Promise<CoverOption[]> {
-  const options: CoverOption[] = [
-    {
-      id: 'steam-hero',
-      url: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_hero.jpg`,
-      source: 'steam',
-      width: 1920,
-      height: 620
-    }
-  ]
+  const apiKey = getEffectiveSteamGridDbKey()
 
-  const storeImages = await fetchSteamStoreImages(appId)
+  const [heroesRaw, storeImages, wideGrids] = await Promise.all([
+    fetchSteamGridDbImages('heroes', appId, apiKey, '1920x620,3840x1240'),
+    fetchSteamStoreImages(appId),
+    fetchSteamGridDbImages('grids', appId, apiKey, '920x430,460x215')
+  ])
+
+  const sgdbHeroes = heroesRaw
+    .filter((h) => isWideBanner(h.width, h.height) && h.width >= 1920)
+    .sort((a, b) => {
+      const styleRank = (s?: string): number => (s === 'material' ? 1 : 0)
+      const styleDiff = styleRank(a.style) - styleRank(b.style)
+      if (styleDiff !== 0) return styleDiff
+      return b.width * b.height - a.width * a.height
+    })
+    .slice(0, 20)
+    .map((h) => ({
+      id: `sgdb-hero-${h.id}`,
+      url: h.url,
+      source: 'steamgriddb' as const,
+      width: h.width,
+      height: h.height
+    }))
+
+  const options: CoverOption[] = [...sgdbHeroes]
+
+  options.push({
+    id: 'steam-hero',
+    url: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_hero.jpg`,
+    source: 'steam',
+    width: 1920,
+    height: 620
+  })
+
   if (storeImages?.headerImage) {
     options.push({ id: 'steam-header', url: storeImages.headerImage, source: 'steam', width: null, height: null })
   }
 
-  const apiKey = getEffectiveSteamGridDbKey()
-  const [heroes, wideGrids] = await Promise.all([
-    fetchSteamGridDbImages('heroes', appId, apiKey, '1920x620'),
-    fetchSteamGridDbImages('grids', appId, apiKey, '920x430,460x215')
-  ])
-
   options.push(
-    ...heroes
-      .filter((h) => isWideBanner(h.width, h.height))
-      .map((h) => ({
-        id: `sgdb-hero-${h.id}`,
-        url: h.url,
-        source: 'steamgriddb' as const,
-        width: h.width,
-        height: h.height
-      })),
     ...wideGrids
       .filter((g) => isWideBanner(g.width, g.height))
       .map((g) => ({

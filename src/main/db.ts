@@ -87,6 +87,7 @@ export async function initDatabase(): Promise<void> {
 
   ensureGamesArtworkColumns()
   ensureOwnershipMigration()
+  ensureThemeAudioRetryMigration()
 
   db.run(
     `INSERT INTO meta (key, value) VALUES ('schema_version', ?)
@@ -181,6 +182,28 @@ function ensureOwnershipMigration(): void {
   }
 
   setMeta(OWNERSHIP_MIGRATION_META_KEY, '1')
+}
+
+const THEME_AUDIO_RETRY_MIGRATION_META_KEY = 'theme_audio_retry_migration_done'
+
+/**
+ * One-time reset for games whose theme track lookup was permanently cached
+ * as "unavailable" under the old single-attempt search — e.g. "The Witcher
+ * 3: Wild Hunt - Complete Edition" failed on KHInsider verbatim but its
+ * simplified title ("The Witcher 3") finds the right album. Without this,
+ * the new simplified-title retry in themeAudioService never runs for a game
+ * that already failed once, since a cached "unavailable" status short-
+ * circuits the lookup. Resetting to "pending" here gives every previously-
+ * failed game exactly one fresh attempt under the new retry logic the next
+ * time its detail page is opened.
+ */
+function ensureThemeAudioRetryMigration(): void {
+  if (!db) return
+  if (getMeta(THEME_AUDIO_RETRY_MIGRATION_META_KEY)) return
+
+  db.run("UPDATE games SET theme_audio_status = 'pending' WHERE theme_audio_status = 'unavailable'")
+
+  setMeta(THEME_AUDIO_RETRY_MIGRATION_META_KEY, '1')
 }
 
 export function persist(): void {
@@ -679,7 +702,16 @@ function upsertSteamAppNoPersist(
   if (findSourceStmt.step()) {
     const gameId = findSourceStmt.getAsObject().game_id as number
     findSourceStmt.free()
-    if (isOwned) db.run('UPDATE games SET is_owned = 1, updated_at = ? WHERE id = ?', [now, gameId])
+    // `isOwned` only ever arrives true from the real Steam library sync, so
+    // playtime_minutes here is Steam's authoritative playtime_forever — safe
+    // to overwrite outright. The Explorer flow (isOwned=false) always passes
+    // 0/null and must never touch an existing row's real playtime.
+    if (isOwned) {
+      db.run(
+        'UPDATE games SET is_owned = 1, playtime_minutes = ?, last_played_at = COALESCE(?, last_played_at), updated_at = ? WHERE id = ?',
+        [playtimeMinutes, lastPlayedAt, now, gameId]
+      )
+    }
     return { gameId, isNew: false }
   }
   findSourceStmt.free()
@@ -710,7 +742,10 @@ function upsertSteamAppNoPersist(
     idStmt.free()
     isNew = true
   } else if (isOwned) {
-    db.run('UPDATE games SET is_owned = 1, updated_at = ? WHERE id = ?', [now, gameId])
+    db.run(
+      'UPDATE games SET is_owned = 1, playtime_minutes = ?, last_played_at = COALESCE(?, last_played_at), updated_at = ? WHERE id = ?',
+      [playtimeMinutes, lastPlayedAt, now, gameId]
+    )
   }
 
   db.run(

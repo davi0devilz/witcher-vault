@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import { applyFontSize, FONT_SIZE_META_KEY, isFontSizeOption } from './lib/fontSize'
+import { applyTheme, isThemeOption, THEME_META_KEY } from './lib/theme'
 import Favorites from './pages/Favorites'
 import GameDetail from './pages/GameDetail'
 import Home from './pages/Home'
@@ -14,6 +15,9 @@ export default function App(): JSX.Element {
   useEffect(() => {
     window.api.db.getMeta(FONT_SIZE_META_KEY).then((value) => {
       applyFontSize(isFontSizeOption(value) ? value : 'medium')
+    })
+    window.api.db.getMeta(THEME_META_KEY).then((value) => {
+      applyTheme(isThemeOption(value) ? value : 'oled')
     })
   }, [])
 

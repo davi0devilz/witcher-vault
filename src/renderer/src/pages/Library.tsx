@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { ArtworkBatchResult, Game, ScanReport } from '../../../shared/models'
 import FallbackPoster from '../components/FallbackPoster'
+import { PlayIcon } from '../components/icons'
 
 const STORE_LABELS: Record<Game['sources'][number]['store'], string> = {
   steam: 'Steam',
@@ -9,13 +10,13 @@ const STORE_LABELS: Record<Game['sources'][number]['store'], string> = {
   manual: 'يدوي'
 }
 
-type StatusFilter = 'all' | 'installed' | 'not_installed'
+type QuickFilter = 'all' | 'installed' | 'favorite'
 type SortMode = 'playtime' | 'recent' | 'alphabetical'
 
-const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
-  { value: 'all', label: 'كل الحالات' },
-  { value: 'installed', label: 'مثبتة' },
-  { value: 'not_installed', label: 'غير مثبتة' }
+const QUICK_FILTERS: Array<{ value: QuickFilter; label: string }> = [
+  { value: 'all', label: 'الكل' },
+  { value: 'installed', label: 'المثبتة فقط' },
+  { value: 'favorite', label: 'المفضلة' }
 ]
 
 const SORT_OPTIONS: Array<{ value: SortMode; label: string }> = [
@@ -35,7 +36,7 @@ export default function Library(): JSX.Element {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [genreFilter, setGenreFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
   const [sortMode, setSortMode] = useState<SortMode>('recent')
 
   useEffect(() => {
@@ -100,7 +101,8 @@ export default function Library(): JSX.Element {
     const filtered = games.filter((game) => {
       if (query && !game.title.toLowerCase().includes(query)) return false
       if (genreFilter !== 'all' && !game.genres.includes(genreFilter)) return false
-      if (statusFilter !== 'all' && game.installStatus !== statusFilter) return false
+      if (quickFilter === 'installed' && game.installStatus !== 'installed') return false
+      if (quickFilter === 'favorite' && !game.isFavorite) return false
       return true
     })
 
@@ -123,7 +125,7 @@ export default function Library(): JSX.Element {
     })
 
     return sorted
-  }, [games, searchQuery, genreFilter, statusFilter, sortMode])
+  }, [games, searchQuery, genreFilter, quickFilter, sortMode])
 
   return (
     <div className="flex flex-col gap-6">
@@ -210,18 +212,6 @@ export default function Library(): JSX.Element {
           </select>
 
           <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-base-border bg-base-elevated px-3 py-2 text-sm text-white/80 focus:border-accent/60 focus:outline-none"
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-
-          <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value as SortMode)}
             className="rounded-lg border border-base-border bg-base-elevated px-3 py-2 text-sm text-white/80 focus:border-accent/60 focus:outline-none"
@@ -232,6 +222,24 @@ export default function Library(): JSX.Element {
               </option>
             ))}
           </select>
+
+          <div className="flex items-center gap-1.5 rounded-lg bg-base-elevated p-1">
+            {QUICK_FILTERS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setQuickFilter(opt.value)}
+                className={[
+                  'rounded-md px-3 py-1.5 text-xs font-bold transition-colors duration-200',
+                  quickFilter === opt.value
+                    ? 'bg-accent text-white shadow-glow'
+                    : 'text-white/55 hover:bg-white/10 hover:text-white'
+                ].join(' ')}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -275,6 +283,21 @@ function GameCard({ game }: { game: Game }): JSX.Element {
   const primaryGenre = game.genres[0] ?? null
   const isNotInstalled = game.installStatus === 'not_installed'
   const [coverFailed, setCoverFailed] = useState(false)
+  const [isLaunching, setIsLaunching] = useState(false)
+  const [launchFailed, setLaunchFailed] = useState(false)
+
+  async function handleQuickPlay(e: ReactMouseEvent): Promise<void> {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsLaunching(true)
+    setLaunchFailed(false)
+    try {
+      const result = await window.api.game.launch(game.id)
+      if (!result.ok) setLaunchFailed(true)
+    } finally {
+      setIsLaunching(false)
+    }
+  }
 
   return (
     <Link
@@ -309,6 +332,24 @@ function GameCard({ game }: { game: Game }): JSX.Element {
         >
           ☁️
         </span>
+      )}
+
+      {!isNotInstalled && (
+        <button
+          type="button"
+          onClick={handleQuickPlay}
+          disabled={isLaunching}
+          title="تشغيل سريع"
+          className="absolute inset-0 z-10 m-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent/90 text-white opacity-0 shadow-glow backdrop-blur transition-all duration-200 hover:scale-110 hover:bg-accent disabled:cursor-wait disabled:opacity-70 group-hover:opacity-100 motion-reduce:transition-none"
+        >
+          {isLaunching ? (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+          ) : launchFailed ? (
+            <span className="text-lg">⚠</span>
+          ) : (
+            <PlayIcon className="h-5 w-5 translate-x-[-1px]" />
+          )}
+        </button>
       )}
 
       <div className="absolute inset-0 flex flex-col justify-end gap-1.5 bg-gradient-to-t from-black/95 via-black/50 to-transparent p-3 opacity-0 transition-opacity duration-300 motion-reduce:transition-none group-hover:opacity-100">

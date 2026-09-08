@@ -29,6 +29,24 @@
 @layer base {
   :root {
     color-scheme: dark;
+
+    /* True OLED — the default palette: pure-black backgrounds so OLED
+       panels can actually turn those pixels off. Overridden by
+       [data-theme='classic'] below when the user opts back into the
+       original purple-tinted dark theme in Settings. */
+    --color-base-bg: #000000;
+    --color-base-surface: #0a0a0a;
+    --color-base-elevated: #121212;
+    --color-base-border: #1f1f1f;
+    --color-accent: #7c5cff;
+    --color-accent-soft: #9b82ff;
+  }
+
+  [data-theme='classic'] {
+    --color-base-bg: #0b0d13;
+    --color-base-surface: #12141c;
+    --color-base-elevated: #181b26;
+    --color-base-border: #242836;
   }
 
   html,
@@ -38,7 +56,7 @@
 
   body {
     margin: 0;
-    background-color: #0b0d13;
+    background-color: var(--color-base-bg);
     color: #e6e7ec;
     font-family: 'Tajawal', sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -51,7 +69,7 @@
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: #242836 transparent;
+    scrollbar-color: var(--color-base-border) transparent;
   }
 
   *::-webkit-scrollbar {
@@ -60,7 +78,7 @@
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: #242836;
+    background-color: var(--color-base-border);
     border-radius: 999px;
   }
 }

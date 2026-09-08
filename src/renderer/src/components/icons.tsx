@@ -73,6 +73,14 @@ export function CompassIcon(props: IconProps): JSX.Element {
   )
 }
 
+export function PlayIcon(props: IconProps): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" {...props}>
+      <path d="M7 4.7c0-1.2 1.3-1.9 2.3-1.3l11 6.8c1 .6 1 2 0 2.6l-11 6.8c-1 .6-2.3-.1-2.3-1.3z" />
+    </svg>
+  )
+}
+
 export function HeartIcon(props: IconProps): JSX.Element {
   return base(
     <path d="M12 20.2s-7.5-4.6-9.9-9.2C.6 7.7 2 4.4 5.1 3.5c2-.6 4 .2 5.2 2 .3.5.7 1.2 1.7 1.2.9 0 1.3-.6 1.7-1.2 1.2-1.8 3.2-2.6 5.2-2 3.1.9 4.5 4.2 3 7.5-2.4 4.6-9.9 9.2-9.9 9.2Z" />,

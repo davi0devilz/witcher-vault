@@ -8,14 +8,14 @@ module.exports = {
       },
       colors: {
         base: {
-          bg: '#0B0D13',
-          surface: '#12141C',
-          elevated: '#181B26',
-          border: '#242836'
+          bg: 'var(--color-base-bg)',
+          surface: 'var(--color-base-surface)',
+          elevated: 'var(--color-base-elevated)',
+          border: 'var(--color-base-border)'
         },
         accent: {
-          DEFAULT: '#7C5CFF',
-          soft: '#9B82FF'
+          DEFAULT: 'var(--color-accent)',
+          soft: 'var(--color-accent-soft)'
         }
       },
       boxShadow: {
