@@ -93,6 +93,12 @@ const api = {
   steam: {
     syncLibrary: (rawInput: string): Promise<SteamLibrarySyncResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.STEAM_LIBRARY_SYNC, rawInput),
+    onBackgroundSync: (callback: (result: SteamLibrarySyncResult) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, result: SteamLibrarySyncResult): void =>
+        callback(result)
+      ipcRenderer.on(IPC_CHANNELS.STEAM_BACKGROUND_SYNC_EVENT, listener)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.STEAM_BACKGROUND_SYNC_EVENT, listener)
+    },
     search: (term: string): Promise<SteamSearchResultItem[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.STEAM_STORE_SEARCH, term),
     ensureGameForApp: (appId: string, title: string): Promise<number> =>

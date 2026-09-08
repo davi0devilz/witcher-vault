@@ -1,4 +1,10 @@
-import { getAllGamesWithSources, setMeta, upsertOwnedSteamGames, type OwnedSteamGame } from '../db'
+import {
+  getMeta,
+  getOwnedGamesWithSources,
+  setMeta,
+  upsertOwnedSteamGames,
+  type OwnedSteamGame
+} from '../db'
 import type { SteamLibrarySyncResult } from '../../shared/models'
 import { fetchOwnedGames, fetchPersonaName, resolveSteamId64 } from './steamWebApi'
 
@@ -33,6 +39,21 @@ export async function syncSteamLibrary(rawInput: string): Promise<SteamLibrarySy
     personaName: personaName ?? undefined,
     totalOwned: owned.length,
     newGames,
-    games: getAllGamesWithSources()
+    games: getOwnedGamesWithSources()
   }
+}
+
+/**
+ * Silent startup sync: re-runs the exact same sync against whichever Steam
+ * profile the user last saved in Settings, with no dialogs and no UI —
+ * called once on every app launch so playtime (including hours racked up by
+ * playing straight from the Steam client, outside this app) never goes
+ * stale without the user having to remember to hit "sync" manually. A
+ * user who has never configured a profile gets a no-op (null), never a
+ * prompt.
+ */
+export async function runSilentBackgroundSync(): Promise<SteamLibrarySyncResult | null> {
+  const storedProfile = getMeta(STEAM_PROFILE_INPUT_META_KEY)
+  if (!storedProfile) return null
+  return syncSteamLibrary(storedProfile)
 }

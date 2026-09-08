@@ -59,6 +59,12 @@ export default function Library(): JSX.Element {
     }
   }, [])
 
+  useEffect(() => {
+    return window.api.steam.onBackgroundSync((result) => {
+      if (result.ok && result.games) setGames(result.games)
+    })
+  }, [])
+
   async function handleScan(): Promise<void> {
     setIsScanning(true)
     setError(null)

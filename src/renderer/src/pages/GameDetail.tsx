@@ -95,6 +95,17 @@ export default function GameDetail(): JSX.Element {
   }, [gameId, loadGame])
 
   useEffect(() => {
+    return window.api.steam.onBackgroundSync((result) => {
+      if (!result.ok || !result.games) return
+      const updated = result.games.find((g) => g.id === gameId)
+      if (!updated) return
+      setGame((prev) =>
+        prev ? { ...prev, playtimeMinutes: updated.playtimeMinutes, lastPlayedAt: updated.lastPlayedAt } : prev
+      )
+    })
+  }, [gameId])
+
+  useEffect(() => {
     if (!game) return
     let cancelled = false
     window.api.hltb

@@ -26,6 +26,7 @@ export const IPC_CHANNELS = {
   THEME_AUDIO_GET: 'theme-audio:get',
   THEME_AUDIO_SET_FROM_FILE: 'theme-audio:set-from-file',
   STEAM_LIBRARY_SYNC: 'steam:library-sync',
+  STEAM_BACKGROUND_SYNC_EVENT: 'steam:background-sync-event',
   STEAM_STORE_SEARCH: 'steam:store-search',
   STEAM_ENSURE_GAME_FOR_APP: 'steam:ensure-game-for-app',
   STEAM_INSTALL_GAME: 'steam:install-game',

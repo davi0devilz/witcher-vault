@@ -6,6 +6,7 @@ import { registerIpcHandlers } from './ipc'
 import { getArtworkCacheDir } from './services/artworkCache'
 import { getAudioCacheDir } from './services/audioCache'
 import { setSessionUpdateListener } from './services/sessionTracker'
+import { runSilentBackgroundSync } from './services/steamLibraryService'
 import { setUpdateEventListener } from './services/updateService'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 
@@ -60,7 +61,7 @@ function createWindow(): void {
     minWidth: 1024,
     minHeight: 640,
     show: false,
-    backgroundColor: '#0B0D13',
+    backgroundColor: '#000000',
     autoHideMenuBar: true,
     title: 'Witcher Vault',
     icon: join(__dirname, '../../resources/icon.ico'),
@@ -103,6 +104,16 @@ app.whenReady().then(async () => {
   setUpdateEventListener((update) => {
     mainWindow?.webContents.send(IPC_CHANNELS.UPDATE_EVENT, update)
   })
+
+  // Fire-and-forget: never blocks window creation, never surfaces an error
+  // dialog. A no-op when no Steam profile has been configured yet.
+  runSilentBackgroundSync()
+    .then((result) => {
+      if (result?.ok) {
+        mainWindow?.webContents.send(IPC_CHANNELS.STEAM_BACKGROUND_SYNC_EVENT, result)
+      }
+    })
+    .catch(() => {})
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
