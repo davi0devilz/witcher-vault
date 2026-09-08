@@ -6,6 +6,7 @@ export const IPC_CHANNELS = {
   LIBRARY_SCAN: 'library:scan',
   LIBRARY_GET_GAMES: 'library:get-games',
   LIBRARY_REMOVE_GAME: 'library:remove-game',
+  FAVORITES_GET_GAMES: 'favorites:get-games',
   ARTWORK_FETCH_LIBRARY: 'artwork:fetch-library',
   ARTWORK_FETCH_FOR_GAME: 'artwork:fetch-for-game',
   GAME_GET_DETAIL: 'game:get-detail',

@@ -1,4 +1,5 @@
 import type { SteamSearchResultItem } from '../../shared/models'
+import { mapWithConcurrency } from './concurrency'
 
 interface StoreSearchResponse {
   total: number
@@ -48,25 +49,6 @@ async function fetchAppType(appId: string): Promise<string | null> {
   } finally {
     clearTimeout(timeout)
   }
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length)
-  let nextIndex = 0
-
-  async function worker(): Promise<void> {
-    while (nextIndex < items.length) {
-      const current = nextIndex++
-      results[current] = await fn(items[current])
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-  return results
 }
 
 /**

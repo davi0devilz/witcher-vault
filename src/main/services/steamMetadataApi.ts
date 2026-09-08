@@ -19,6 +19,8 @@ interface SteamAppDetailsEntry {
     publishers?: string[]
     header_image?: string
     screenshots?: Array<{ path_full?: string }>
+    is_free?: boolean
+    price_overview?: { currency: string; final: number }
   }
 }
 
@@ -41,16 +43,20 @@ function stripHtml(html: string): string {
 async function requestAppDetails(
   appId: string,
   lang: string,
-  timeoutMs = 10000
+  options: { timeoutMs?: number; cc?: string; filters?: string } = {}
 ): Promise<SteamAppDetailsEntry['data'] | null> {
+  const { timeoutMs = 10000, cc, filters } = options
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const res = await fetch(
-      `https://store.steampowered.com/api/appdetails?appids=${encodeURIComponent(appId)}&l=${lang}`,
-      { signal: controller.signal }
-    )
+    const params = new URLSearchParams({ appids: appId, l: lang })
+    if (cc) params.set('cc', cc)
+    if (filters) params.set('filters', filters)
+
+    const res = await fetch(`https://store.steampowered.com/api/appdetails?${params.toString()}`, {
+      signal: controller.signal
+    })
     if (!res.ok) return null
 
     const json = (await res.json()) as SteamAppDetailsResponse
@@ -108,5 +114,31 @@ export async function fetchSteamStoreImages(appId: string): Promise<SteamStoreIm
   return {
     headerImage: data.header_image ?? null,
     screenshots: (data.screenshots ?? []).map((s) => s.path_full).filter((url): url is string => Boolean(url))
+  }
+}
+
+export interface SimplePrice {
+  isFree: boolean
+  final: number | null
+  currency: string | null
+}
+
+/**
+ * Lightweight US-region price lookup for an AppID — used by the Favorites
+ * grid to show a current price next to games the user is only tracking (not
+ * owned). Uses a narrow `filters` value to keep the response small since it
+ * only needs is_free/price_overview, not the full app details payload.
+ */
+export async function fetchSimplePrice(appId: string): Promise<SimplePrice | null> {
+  const data = await requestAppDetails(appId, 'english', { cc: 'us', filters: 'basic,price_overview' })
+  if (!data) return null
+
+  if (data.is_free) return { isFree: true, final: null, currency: null }
+  if (!data.price_overview) return null
+
+  return {
+    isFree: false,
+    final: data.price_overview.final / 100,
+    currency: data.price_overview.currency
   }
 }

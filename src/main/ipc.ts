@@ -1,10 +1,10 @@
 import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron'
 import {
   ensureGameForSteamApp,
-  getAllGamesWithSources,
   getDbFilePath,
   getGameWithSourcesById,
   getMeta,
+  getOwnedGamesWithSources,
   getSessionsForGame,
   removeGame,
   setFavorite,
@@ -22,6 +22,7 @@ import {
   setHeroFromLocalFile,
   setHeroFromUrl
 } from './services/coverPickerService'
+import { getFavoritesWithPricing } from './services/favoritesService'
 import { getHltbForGame } from './services/hltbService'
 import { getRegionalPricing } from './services/regionalPricingService'
 import { launchGame } from './services/sessionTracker'
@@ -87,7 +88,9 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.LIBRARY_SCAN, () => runFullScan())
 
-  ipcMain.handle(IPC_CHANNELS.LIBRARY_GET_GAMES, () => getAllGamesWithSources())
+  ipcMain.handle(IPC_CHANNELS.LIBRARY_GET_GAMES, () => getOwnedGamesWithSources())
+
+  ipcMain.handle(IPC_CHANNELS.FAVORITES_GET_GAMES, () => getFavoritesWithPricing())
 
   ipcMain.handle(IPC_CHANNELS.LIBRARY_REMOVE_GAME, (_event, gameId: number) => {
     removeGame(gameId)

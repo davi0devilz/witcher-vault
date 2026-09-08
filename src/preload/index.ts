@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from '../shared/ipc-channels'
 import type {
   ArtworkBatchResult,
   CoverOption,
+  FavoriteGameItem,
   Game,
   GameDetail,
   HltbResult,
@@ -37,6 +38,9 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.LIBRARY_REMOVE_GAME, gameId),
     fetchArtwork: (forceRefresh = false): Promise<ArtworkBatchResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.ARTWORK_FETCH_LIBRARY, forceRefresh)
+  },
+  favorites: {
+    getGames: (): Promise<FavoriteGameItem[]> => ipcRenderer.invoke(IPC_CHANNELS.FAVORITES_GET_GAMES)
   },
   game: {
     getDetail: (gameId: number): Promise<GameDetail | null> =>

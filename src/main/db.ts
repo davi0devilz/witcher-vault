@@ -86,6 +86,7 @@ export async function initDatabase(): Promise<void> {
   `)
 
   ensureGamesArtworkColumns()
+  ensureOwnershipMigration()
 
   db.run(
     `INSERT INTO meta (key, value) VALUES ('schema_version', ?)
@@ -127,7 +128,11 @@ function ensureGamesArtworkColumns(): void {
     ['theme_audio_status', "TEXT NOT NULL DEFAULT 'pending'"],
     ['theme_audio_path', 'TEXT'],
     ['theme_audio_source', 'TEXT'],
-    ['theme_audio_checked_at', 'TEXT']
+    ['theme_audio_checked_at', 'TEXT'],
+    // Defaults to 0 (not owned) so the one-time migration below can tell
+    // pre-existing rows apart from anything inserted after this column
+    // existed — every insert path since sets it explicitly.
+    ['is_owned', 'INTEGER NOT NULL DEFAULT 0']
   ]
 
   for (const [name, definition] of columnsToAdd) {
@@ -135,6 +140,47 @@ function ensureGamesArtworkColumns(): void {
       db.run(`ALTER TABLE games ADD COLUMN ${name} ${definition}`)
     }
   }
+}
+
+const OWNERSHIP_MIGRATION_META_KEY = 'ownership_migration_done'
+
+/**
+ * One-time backfill for the `is_owned` column: Steam Explorer used to insert
+ * a game row identical to a real library entry just from opening a search
+ * result, so the Library screen (which now only lists owned games) would
+ * otherwise go blank for existing installs. A row from before this column
+ * existed is treated as owned when there's clear evidence of ownership
+ * (installed locally, has recorded playtime, was actually played, or came
+ * from a non-Steam source that's always locally-owned); everything else is
+ * an Explorer leftover and is deleted — except anything favorited, which
+ * Favorites needs to keep regardless of ownership.
+ */
+function ensureOwnershipMigration(): void {
+  if (!db) return
+  if (getMeta(OWNERSHIP_MIGRATION_META_KEY)) return
+
+  db.run(`
+    UPDATE games SET is_owned = 1
+    WHERE install_status = 'installed'
+       OR playtime_minutes > 0
+       OR last_played_at IS NOT NULL
+       OR id IN (SELECT game_id FROM launch_sources WHERE store != 'steam')
+  `)
+
+  const orphanIdsStmt = db.prepare('SELECT id FROM games WHERE is_owned = 0 AND is_favorite = 0')
+  const orphanIds: number[] = []
+  while (orphanIdsStmt.step()) {
+    orphanIds.push(orphanIdsStmt.getAsObject().id as number)
+  }
+  orphanIdsStmt.free()
+
+  for (const gameId of orphanIds) {
+    db.run('DELETE FROM sessions WHERE game_id = ?', [gameId])
+    db.run('DELETE FROM launch_sources WHERE game_id = ?', [gameId])
+    db.run('DELETE FROM games WHERE id = ?', [gameId])
+  }
+
+  setMeta(OWNERSHIP_MIGRATION_META_KEY, '1')
 }
 
 export function persist(): void {
@@ -196,8 +242,8 @@ export function upsertScannedGames(scanned: ScannedGame[]): UpsertResult {
     if (gameId === null) {
       db.run(
         `INSERT INTO games
-          (normalized_title, title, install_status, playtime_minutes, is_favorite, created_at, updated_at)
-         VALUES (?, ?, 'installed', 0, 0, ?, ?)`,
+          (normalized_title, title, install_status, playtime_minutes, is_favorite, is_owned, created_at, updated_at)
+         VALUES (?, ?, 'installed', 0, 0, 1, ?, ?)`,
         [normalized, item.title, now, now]
       )
       const idStmt = db.prepare('SELECT last_insert_rowid() AS id')
@@ -208,11 +254,12 @@ export function upsertScannedGames(scanned: ScannedGame[]): UpsertResult {
     } else {
       // A game reaching this path was just found on disk by a local scanner —
       // even if it was previously known only as an owned-but-uninstalled
-      // Steam library entry, it's installed now.
-      db.run("UPDATE games SET updated_at = ?, install_status = 'installed' WHERE id = ?", [
-        now,
-        gameId
-      ])
+      // Steam library entry (or an Explorer lookup), it's installed and
+      // owned now.
+      db.run(
+        "UPDATE games SET updated_at = ?, install_status = 'installed', is_owned = 1 WHERE id = ?",
+        [now, gameId]
+      )
     }
 
     const findSourceStmt = db.prepare(
@@ -281,6 +328,7 @@ function mapGameRow(row: Record<string, unknown>): Game {
     playtimeMinutes: row.playtime_minutes as number,
     lastPlayedAt: (row.last_played_at as string | null) ?? null,
     isFavorite: Boolean(row.is_favorite),
+    isOwned: Boolean(row.is_owned),
     notes: (row.notes as string | null) ?? null,
     notesUpdatedAt: (row.notes_updated_at as string | null) ?? null,
     hltbStatus: (row.hltb_status as Game['hltbStatus']) ?? 'pending',
@@ -310,19 +358,22 @@ function mapSourceRow(row: Record<string, unknown>): LaunchSource {
   }
 }
 
-export function getAllGamesWithSources(): Game[] {
+function queryGamesWithSources(whereClause = ''): Game[] {
   if (!db) throw new Error('Database not initialized')
 
   const games: Game[] = []
   const gameMap = new Map<number, Game>()
 
-  const gameStmt = db.prepare('SELECT * FROM games ORDER BY title COLLATE NOCASE ASC')
+  const gameStmt = db.prepare(
+    `SELECT * FROM games ${whereClause} ORDER BY title COLLATE NOCASE ASC`
+  )
   while (gameStmt.step()) {
     const game = mapGameRow(gameStmt.getAsObject())
     games.push(game)
     gameMap.set(game.id, game)
   }
   gameStmt.free()
+  if (games.length === 0) return games
 
   const sourceStmt = db.prepare('SELECT * FROM launch_sources ORDER BY is_primary DESC, id ASC')
   while (sourceStmt.step()) {
@@ -334,6 +385,20 @@ export function getAllGamesWithSources(): Game[] {
   sourceStmt.free()
 
   return games
+}
+
+export function getAllGamesWithSources(): Game[] {
+  return queryGamesWithSources()
+}
+
+/** Library screen: real ownership only — excludes Steam Explorer lookups. */
+export function getOwnedGamesWithSources(): Game[] {
+  return queryGamesWithSources('WHERE is_owned = 1')
+}
+
+/** Favorites tab: anything starred, owned or not (e.g. an Explorer wishlist pick). */
+export function getFavoriteGamesWithSources(): Game[] {
+  return queryGamesWithSources('WHERE is_favorite = 1')
 }
 
 export function getGameWithSourcesById(gameId: number): Game | null {
@@ -592,13 +657,17 @@ export function setGameThemeAudio(
  * Finds or creates the game+launch-source row for a Steam AppID without
  * touching install/session state on an existing row — shared by the owned-
  * library sync (bulk) and the Steam Explorer "open this game" flow (single).
- * Returns the row's game id and whether a brand-new game row was created.
+ * `isOwned` sets ownership on a brand-new row and, when true, upgrades an
+ * existing row to owned — but a `false` call (Explorer) never downgrades a
+ * row that's already owned. Returns the row's game id and whether a
+ * brand-new game row was created.
  */
 function upsertSteamAppNoPersist(
   appId: string,
   title: string,
   playtimeMinutes: number,
-  lastPlayedAt: string | null
+  lastPlayedAt: string | null,
+  isOwned: boolean
 ): { gameId: number; isNew: boolean } {
   if (!db) throw new Error('Database not initialized')
   const now = new Date().toISOString()
@@ -610,6 +679,7 @@ function upsertSteamAppNoPersist(
   if (findSourceStmt.step()) {
     const gameId = findSourceStmt.getAsObject().game_id as number
     findSourceStmt.free()
+    if (isOwned) db.run('UPDATE games SET is_owned = 1, updated_at = ? WHERE id = ?', [now, gameId])
     return { gameId, isNew: false }
   }
   findSourceStmt.free()
@@ -630,15 +700,17 @@ function upsertSteamAppNoPersist(
   if (gameId === null) {
     db.run(
       `INSERT INTO games
-        (normalized_title, title, install_status, playtime_minutes, last_played_at, is_favorite, created_at, updated_at)
-       VALUES (?, ?, 'not_installed', ?, ?, 0, ?, ?)`,
-      [normalized, title, playtimeMinutes, lastPlayedAt, now, now]
+        (normalized_title, title, install_status, playtime_minutes, last_played_at, is_favorite, is_owned, created_at, updated_at)
+       VALUES (?, ?, 'not_installed', ?, ?, 0, ?, ?, ?)`,
+      [normalized, title, playtimeMinutes, lastPlayedAt, isOwned ? 1 : 0, now, now]
     )
     const idStmt = db.prepare('SELECT last_insert_rowid() AS id')
     idStmt.step()
     gameId = idStmt.getAsObject().id as number
     idStmt.free()
     isNew = true
+  } else if (isOwned) {
+    db.run('UPDATE games SET is_owned = 1, updated_at = ? WHERE id = ?', [now, gameId])
   }
 
   db.run(
@@ -654,11 +726,12 @@ function upsertSteamAppNoPersist(
 /**
  * Ensures a game row exists for a Steam Explorer result the user clicked on,
  * so its detail page (artwork, HLTB, description, pricing...) works exactly
- * like any owned game. Marks it not-installed only when brand new — an
- * already-known game (installed or previously synced) is left untouched.
+ * like any owned game — without counting as owned, so it doesn't show up in
+ * the Library. Marks it not-installed only when brand new — an already-known
+ * game (installed or previously synced) is left untouched.
  */
 export function ensureGameForSteamApp(appId: string, title: string): number {
-  const { gameId } = upsertSteamAppNoPersist(appId, title, 0, null)
+  const { gameId } = upsertSteamAppNoPersist(appId, title, 0, null, false)
   persist()
   return gameId
 }
@@ -679,7 +752,8 @@ export function upsertOwnedSteamGames(owned: OwnedSteamGame[]): { newGames: numb
       item.appId,
       item.title,
       item.playtimeMinutes,
-      item.lastPlayedAt
+      item.lastPlayedAt,
+      true
     )
     if (isNew) newGames++
   }

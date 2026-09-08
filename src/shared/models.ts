@@ -36,6 +36,7 @@ export interface Game {
   playtimeMinutes: number
   lastPlayedAt: string | null
   isFavorite: boolean
+  isOwned: boolean
   notes: string | null
   notesUpdatedAt: string | null
   hltbStatus: HltbStatus
@@ -79,6 +80,17 @@ export interface SteamSearchResultItem {
   appId: string
   name: string
   tinyImage: string | null
+  priceFinal: number | null
+  priceCurrency: string | null
+}
+
+export interface FavoriteGameItem {
+  gameId: number
+  title: string
+  coverPath: string | null
+  isOwned: boolean
+  steamAppId: string | null
+  isFree: boolean
   priceFinal: number | null
   priceCurrency: string | null
 }

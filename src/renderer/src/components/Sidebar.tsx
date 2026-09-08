@@ -1,6 +1,15 @@
 import { NavLink } from 'react-router-dom'
 import iconUrl from '../assets/icon.png'
-import { CompassIcon, DiceIcon, DiscordIcon, HomeIcon, LibraryIcon, SettingsIcon, XIcon } from './icons'
+import {
+  CompassIcon,
+  DiceIcon,
+  DiscordIcon,
+  HeartIcon,
+  HomeIcon,
+  LibraryIcon,
+  SettingsIcon,
+  XIcon
+} from './icons'
 
 const SOCIAL_LINKS = [
   { label: 'حساب X', url: 'https://x.com/ibusqui', icon: XIcon },
@@ -16,6 +25,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: '/', label: 'الرئيسية', icon: HomeIcon },
   { to: '/library', label: 'المكتبة', icon: LibraryIcon },
+  { to: '/favorites', label: 'المفضلة', icon: HeartIcon },
   { to: '/steam-explorer', label: 'استكشاف Steam', icon: CompassIcon },
   { to: '/what-to-play', label: 'وش ألعب؟', icon: DiceIcon },
   { to: '/settings', label: 'الإعدادات', icon: SettingsIcon }
