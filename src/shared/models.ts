@@ -1,0 +1,109 @@
+export type StoreType = 'steam' | 'epic' | 'manual'
+
+export type InstallStatus = 'installed' | 'not_installed'
+
+export interface LaunchSource {
+  id: number
+  gameId: number
+  store: StoreType
+  storeAppId: string | null
+  rawTitle: string
+  installDir: string | null
+  executablePath: string | null
+  launchCommand: string | null
+  isPrimary: boolean
+}
+
+export type ArtworkStatus = 'pending' | 'fetched' | 'unavailable'
+
+export type DescriptionLanguage = 'ar' | 'en'
+
+export interface Game {
+  id: number
+  title: string
+  normalizedTitle: string
+  installStatus: InstallStatus
+  coverPath: string | null
+  heroPath: string | null
+  genres: string[]
+  shortDescription: string | null
+  detailedDescription: string | null
+  descriptionLanguage: DescriptionLanguage | null
+  releaseDate: string | null
+  developer: string | null
+  publisher: string | null
+  artworkStatus: ArtworkStatus
+  playtimeMinutes: number
+  lastPlayedAt: string | null
+  isFavorite: boolean
+  notes: string | null
+  notesUpdatedAt: string | null
+  createdAt: string
+  updatedAt: string
+  sources: LaunchSource[]
+}
+
+export interface GameSession {
+  id: number
+  gameId: number
+  startedAt: string
+  endedAt: string | null
+  durationMinutes: number
+}
+
+export interface GameDetail extends Game {
+  sessions: GameSession[]
+}
+
+export interface SessionUpdate {
+  gameId: number
+  status: 'starting' | 'running' | 'ended' | 'timeout' | 'error'
+  startedAt: string | null
+  elapsedMinutes: number
+  message?: string
+}
+
+export interface CoverOption {
+  id: string
+  url: string
+  source: 'steam' | 'steamgriddb'
+  width: number | null
+  height: number | null
+}
+
+export interface ScanError {
+  scanner: 'steam' | 'epic'
+  message: string
+}
+
+export interface ScanReport {
+  scannedAt: string
+  steamFound: number
+  epicFound: number
+  newGames: number
+  newSources: number
+  errors: ScanError[]
+  games: Game[]
+}
+
+export interface ArtworkOutcome {
+  gameId: number
+  title: string
+  status: 'fetched' | 'unavailable' | 'skipped'
+}
+
+export interface ArtworkBatchResult {
+  processed: number
+  fetched: number
+  unavailable: number
+  skipped: number
+  outcomes: ArtworkOutcome[]
+  games: Game[]
+}
+
+export interface TranslateDescriptionResult {
+  ok: boolean
+  shortDescription: string | null
+  detailedDescription: string | null
+  message?: string
+}

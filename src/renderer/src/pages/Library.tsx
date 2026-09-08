@@ -1,0 +1,308 @@
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import type { ArtworkBatchResult, Game, ScanReport } from '../../../shared/models'
+import FallbackPoster from '../components/FallbackPoster'
+
+const STORE_LABELS: Record<Game['sources'][number]['store'], string> = {
+  steam: 'Steam',
+  epic: 'Epic Games',
+  manual: 'يدوي'
+}
+
+type StatusFilter = 'all' | 'installed' | 'not_installed'
+type SortMode = 'playtime' | 'recent' | 'alphabetical'
+
+const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
+  { value: 'all', label: 'كل الحالات' },
+  { value: 'installed', label: 'مثبتة' },
+  { value: 'not_installed', label: 'غير مثبتة' }
+]
+
+const SORT_OPTIONS: Array<{ value: SortMode; label: string }> = [
+  { value: 'playtime', label: 'الأكثر لعباً' },
+  { value: 'recent', label: 'الأحدث' },
+  { value: 'alphabetical', label: 'أبجدياً' }
+]
+
+export default function Library(): JSX.Element {
+  const [games, setGames] = useState<Game[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isScanning, setIsScanning] = useState(false)
+  const [isFetchingArtwork, setIsFetchingArtwork] = useState(false)
+  const [scanReport, setScanReport] = useState<ScanReport | null>(null)
+  const [artworkReport, setArtworkReport] = useState<ArtworkBatchResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [genreFilter, setGenreFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [sortMode, setSortMode] = useState<SortMode>('recent')
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadGames(): Promise<void> {
+      try {
+        const result = await window.api.library.getGames()
+        if (!cancelled) setGames(result)
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    loadGames()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function handleScan(): Promise<void> {
+    setIsScanning(true)
+    setError(null)
+    try {
+      const report = await window.api.library.scanInstalledGames()
+      setScanReport(report)
+      setGames(report.games)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsScanning(false)
+    }
+  }
+
+  async function handleFetchArtwork(): Promise<void> {
+    setIsFetchingArtwork(true)
+    setError(null)
+    try {
+      const report = await window.api.library.fetchArtwork()
+      setArtworkReport(report)
+      setGames(report.games)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsFetchingArtwork(false)
+    }
+  }
+
+  const genres = useMemo(() => {
+    const set = new Set<string>()
+    for (const game of games) {
+      for (const genre of game.genres) set.add(genre)
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [games])
+
+  const visibleGames = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+
+    const filtered = games.filter((game) => {
+      if (query && !game.title.toLowerCase().includes(query)) return false
+      if (genreFilter !== 'all' && !game.genres.includes(genreFilter)) return false
+      if (statusFilter !== 'all' && game.installStatus !== statusFilter) return false
+      return true
+    })
+
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortMode) {
+        case 'playtime':
+          return b.playtimeMinutes - a.playtimeMinutes
+        case 'alphabetical':
+          return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+        case 'recent':
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      }
+    })
+
+    return sorted
+  }, [games, searchQuery, genreFilter, statusFilter, sortMode])
+
+  return (
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="font-tajawal text-2xl font-bold text-white">المكتبة</h2>
+          <p className="mt-1 text-sm text-white/45">
+            {isLoading
+              ? 'جارِ تحميل الألعاب المحفوظة...'
+              : `لديك ${games.length} لعبة في مكتبتك.`}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleFetchArtwork}
+            disabled={isFetchingArtwork || games.length === 0}
+            className="flex items-center gap-2 rounded-xl border border-base-border bg-base-surface px-4 py-2.5 text-sm font-bold text-white/80 transition-colors duration-200 hover:border-accent/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isFetchingArtwork ? 'جارِ تحديث الأغلفة...' : '🖼 تحديث الأغلفة'}
+          </button>
+          <button
+            type="button"
+            onClick={handleScan}
+            disabled={isScanning}
+            className="flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-white shadow-glow transition-colors duration-200 hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isScanning ? 'جارِ الفحص...' : '🔍 فحص الألعاب المثبتة'}
+          </button>
+        </div>
+      </header>
+
+      {scanReport && (
+        <ReportBanner>
+          تم العثور على {scanReport.steamFound} لعبة من Steam و{scanReport.epicFound} لعبة من Epic
+          Games — أُضيف {scanReport.newGames} لعبة جديدة ({scanReport.newSources} مصدر تشغيل جديد).
+          {scanReport.errors.length > 0 && (
+            <ul className="mt-2 flex flex-col gap-1">
+              {scanReport.errors.map((e, i) => (
+                <li key={i} className="text-xs text-amber-400/80">
+                  ⚠ {e.message}
+                </li>
+              ))}
+            </ul>
+          )}
+        </ReportBanner>
+      )}
+
+      {artworkReport && (
+        <ReportBanner>
+          تمت معالجة {artworkReport.processed} لعبة — {artworkReport.fetched} غلاف جديد،{' '}
+          {artworkReport.skipped} محفوظ مسبقاً، و{artworkReport.unavailable} بلا غلاف متاح.
+        </ReportBanner>
+      )}
+
+      {error && (
+        <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          حدث خطأ: {error}
+        </p>
+      )}
+
+      {games.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-base-border bg-base-surface p-3">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="ابحث عن لعبة... (عربي / English)"
+            className="min-w-[220px] flex-1 rounded-lg border border-base-border bg-base-elevated px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-accent/60 focus:outline-none"
+          />
+
+          <select
+            value={genreFilter}
+            onChange={(e) => setGenreFilter(e.target.value)}
+            className="rounded-lg border border-base-border bg-base-elevated px-3 py-2 text-sm text-white/80 focus:border-accent/60 focus:outline-none"
+          >
+            <option value="all">كل التصنيفات</option>
+            {genres.map((genre) => (
+              <option key={genre} value={genre}>
+                {genre}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="rounded-lg border border-base-border bg-base-elevated px-3 py-2 text-sm text-white/80 focus:border-accent/60 focus:outline-none"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
+            className="rounded-lg border border-base-border bg-base-elevated px-3 py-2 text-sm text-white/80 focus:border-accent/60 focus:outline-none"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                ترتيب: {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {!isLoading && games.length === 0 && (
+        <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-base-border bg-base-surface/60 text-center">
+          <p className="font-tajawal text-lg font-bold text-white/70">لا توجد ألعاب بعد</p>
+          <p className="max-w-sm text-sm text-white/40">
+            اضغط على زر "فحص الألعاب المثبتة" أعلاه لاكتشاف ألعابك من Steam وEpic Games تلقائياً.
+          </p>
+        </div>
+      )}
+
+      {games.length > 0 && visibleGames.length === 0 && (
+        <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-base-border bg-base-surface/60 text-center">
+          <p className="font-tajawal text-base font-bold text-white/70">لا توجد نتائج مطابقة</p>
+          <p className="text-sm text-white/40">جرّب تعديل البحث أو الفلاتر.</p>
+        </div>
+      )}
+
+      {visibleGames.length > 0 && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          {visibleGames.map((game) => (
+            <GameCard key={game.id} game={game} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ReportBanner({ children }: { children: ReactNode }): JSX.Element {
+  return (
+    <section className="rounded-2xl border border-base-border bg-base-surface p-5 text-sm leading-relaxed text-white/60">
+      {children}
+    </section>
+  )
+}
+
+function GameCard({ game }: { game: Game }): JSX.Element {
+  const hours = Math.floor(game.playtimeMinutes / 60)
+  const primaryGenre = game.genres[0] ?? null
+
+  return (
+    <Link
+      to={`/game/${game.id}`}
+      className="group relative block aspect-[2/3] w-full overflow-hidden rounded-xl border border-base-border bg-base-surface transition-transform duration-300 ease-out hover:-translate-y-1 hover:shadow-glow motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      title={game.title}
+    >
+      {game.coverPath ? (
+        <img
+          src={`app-artwork://local/${game.coverPath}`}
+          alt={game.title}
+          loading="lazy"
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <FallbackPoster title={game.title} />
+      )}
+
+      <div className="absolute inset-0 flex flex-col justify-end gap-1.5 bg-gradient-to-t from-black/95 via-black/50 to-transparent p-3 opacity-0 transition-opacity duration-300 motion-reduce:transition-none group-hover:opacity-100">
+        <h3 className="line-clamp-2 font-tajawal text-sm font-bold text-white">{game.title}</h3>
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-white/70">
+          {primaryGenre && <span>{primaryGenre}</span>}
+          {primaryGenre && <span>•</span>}
+          <span>{hours > 0 ? `${hours} ساعة لعب` : 'لم تُلعب بعد'}</span>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {game.sources.map((source) => (
+            <span
+              key={source.id}
+              className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/60"
+            >
+              {STORE_LABELS[source.store]}
+            </span>
+          ))}
+        </div>
+      </div>
+    </Link>
+  )
+}
