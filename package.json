@@ -13,7 +13,8 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
-    "dist:win": "npm run build && electron-builder --win nsis portable zip"
+    "dist:win": "npm run build && electron-builder --win nsis portable && npm run zip:release",
+    "zip:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-release-zip.ps1"
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
@@ -71,12 +72,6 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64"
-          ]
         }
       ]
     },
@@ -90,7 +85,6 @@
     "portable": {
       "artifactName": "Witcher-Vault-Portable-v${version}.exe"
     },
-    "artifactName": "Witcher-Vault-v${version}-Windows.${ext}",
     "publish": {
       "provider": "github",
       "owner": "davi0devilz",
