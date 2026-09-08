@@ -8,6 +8,8 @@ import {
 } from '../lib/fontSize'
 
 const STEAMGRIDDB_KEY_META_KEY = 'steamgriddb_api_key'
+const STEAM_API_KEY_META_KEY = 'steam_api_key'
+const STEAM_PROFILE_INPUT_META_KEY = 'steam_profile_input'
 
 const FONT_SIZE_OPTIONS: Array<{ value: FontSizeOption; label: string }> = [
   { value: 'small', label: 'صغير' },
@@ -33,18 +35,29 @@ export default function Settings(): JSX.Element {
   const [appVersion, setAppVersion] = useState('')
   const [updateState, setUpdateState] = useState<UpdateState>({ phase: 'idle' })
 
+  const [steamProfileInput, setSteamProfileInput] = useState('')
+  const [steamApiKey, setSteamApiKey] = useState('')
+  const [isSteamSyncing, setIsSteamSyncing] = useState(false)
+  const [steamSyncMessage, setSteamSyncMessage] = useState<{ ok: boolean; text: string } | null>(
+    null
+  )
+
   useEffect(() => {
     let cancelled = false
 
     async function loadSettings(): Promise<void> {
-      const [value, storedFontSize] = await Promise.all([
+      const [value, storedFontSize, storedSteamProfile, storedSteamApiKey] = await Promise.all([
         window.api.db.getMeta(STEAMGRIDDB_KEY_META_KEY),
-        window.api.db.getMeta(FONT_SIZE_META_KEY)
+        window.api.db.getMeta(FONT_SIZE_META_KEY),
+        window.api.db.getMeta(STEAM_PROFILE_INPUT_META_KEY),
+        window.api.db.getMeta(STEAM_API_KEY_META_KEY)
       ])
       if (!cancelled) {
         setSavedKey(value)
         setApiKey(value ?? '')
         if (isFontSizeOption(storedFontSize)) setFontSize(storedFontSize)
+        setSteamProfileInput(storedSteamProfile ?? '')
+        setSteamApiKey(storedSteamApiKey ?? '')
         setIsLoading(false)
       }
     }
@@ -54,6 +67,21 @@ export default function Settings(): JSX.Element {
       cancelled = true
     }
   }, [])
+
+  async function handleSyncSteamLibrary(): Promise<void> {
+    setIsSteamSyncing(true)
+    setSteamSyncMessage(null)
+    try {
+      const result = await window.api.steam.syncLibrary(steamProfileInput)
+      setSteamSyncMessage({ ok: result.ok, text: result.message })
+    } finally {
+      setIsSteamSyncing(false)
+    }
+  }
+
+  async function handleSaveSteamApiKey(): Promise<void> {
+    await window.api.db.setMeta(STEAM_API_KEY_META_KEY, steamApiKey.trim())
+  }
 
   useEffect(() => {
     window.api.getAppVersion().then(setAppVersion)
@@ -131,6 +159,97 @@ export default function Settings(): JSX.Element {
         <SettingRow title="اللغة والاتجاه" value="العربية — من اليمين لليسار" />
         <SettingRow title="الثيم" value="داكن سينمائي" />
         <SettingRow title="مكان قاعدة البيانات" value="مجلد بيانات المستخدم (userData)" />
+      </div>
+
+      <div className="rounded-2xl border border-base-border bg-base-surface p-5">
+        <h3 className="font-tajawal text-sm font-bold text-white">☁️ مكتبة Steam السحابية</h3>
+        <p className="mt-1 text-xs leading-relaxed text-white/45">
+          اسحب كل الألعاب المملوكة في حسابك على Steam — حتى غير المثبتة على هذا الجهاز — لتظهر في
+          مكتبتك مع كل تفاصيلها.
+        </p>
+
+        {!isLoading && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <input
+              type="text"
+              value={steamProfileInput}
+              onChange={(e) => setSteamProfileInput(e.target.value)}
+              placeholder="معرّف رقمي (SteamID64) أو اسم مخصص أو رابط بروفايلك"
+              dir="ltr"
+              className="min-w-[260px] flex-1 rounded-lg border border-base-border bg-base-elevated px-3 py-2 text-right text-sm text-white placeholder:text-white/30 focus:border-accent/60 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={handleSyncSteamLibrary}
+              disabled={isSteamSyncing || !steamProfileInput.trim()}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSteamSyncing ? 'جارِ المزامنة...' : '🔄 حفظ ومزامنة الألعاب'}
+            </button>
+          </div>
+        )}
+
+        {steamSyncMessage && (
+          <p
+            className={[
+              'mt-2 text-xs leading-relaxed',
+              steamSyncMessage.ok ? 'text-emerald-400/80' : 'text-red-400/80'
+            ].join(' ')}
+          >
+            {steamSyncMessage.ok ? '✓ ' : '⚠ '}
+            {steamSyncMessage.text}
+          </p>
+        )}
+
+        <div className="mt-4 rounded-xl border border-base-border bg-base-elevated p-4">
+          <h4 className="text-xs font-bold text-white/70">قبل المزامنة</h4>
+          <ol className="mt-2 flex flex-col gap-1.5 text-xs leading-relaxed text-white/50">
+            <li>
+              1. تأكد أن خصوصية ملفك الشخصي على Steam و"تفاصيل الألعاب" (Game details) محددة على
+              "عام / Public" — من: Steam ← الملف الشخصي ← تعديل الملف الشخصي ← إعدادات الخصوصية.
+            </li>
+            <li>
+              2. يمكنك كتابة اسم حسابك المخصص فقط (الموجود في رابط بروفايلك)، أو نسخ رابط
+              بروفايلك كاملاً من Steam وسيتعرف عليه البرنامج تلقائياً.
+            </li>
+          </ol>
+        </div>
+
+        <details className="mt-3 text-xs text-white/40">
+          <summary className="cursor-pointer select-none text-white/50 hover:text-white/70">
+            مفتاح Steam Web API خاص بك (اختياري)
+          </summary>
+          <p className="mt-2 leading-relaxed">
+            يعمل التطبيق افتراضياً بمفتاح مشترك، لكن يمكنك استخدام مفتاحك الخاص المجاني من{' '}
+            <button
+              type="button"
+              onClick={() =>
+                window.api.shell.openExternal('https://steamcommunity.com/dev/apikey')
+              }
+              className="text-accent-soft hover:underline"
+            >
+              steamcommunity.com/dev/apikey
+            </button>{' '}
+            إن رغبت — اتركها فارغة لاستخدام المفتاح الافتراضي.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <input
+              type="password"
+              value={steamApiKey}
+              onChange={(e) => setSteamApiKey(e.target.value)}
+              placeholder="مفتاحك الخاص (اختياري)"
+              dir="ltr"
+              className="min-w-[220px] flex-1 rounded-lg border border-base-border bg-base-elevated px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-accent/60 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={handleSaveSteamApiKey}
+              className="rounded-lg border border-base-border bg-base-surface px-4 py-2 text-sm font-bold text-white/80 transition-colors duration-200 hover:border-accent/40 hover:text-white"
+            >
+              حفظ
+            </button>
+          </div>
+        </details>
       </div>
 
       <div className="rounded-2xl border border-base-border bg-base-surface p-5">

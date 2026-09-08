@@ -6,6 +6,7 @@ import GameDetail from './pages/GameDetail'
 import Home from './pages/Home'
 import Library from './pages/Library'
 import Settings from './pages/Settings'
+import SteamExplorer from './pages/SteamExplorer'
 import WhatToPlay from './pages/WhatToPlay'
 
 export default function App(): JSX.Element {
@@ -21,6 +22,7 @@ export default function App(): JSX.Element {
         <Route index element={<Home />} />
         <Route path="library" element={<Library />} />
         <Route path="game/:id" element={<GameDetail />} />
+        <Route path="steam-explorer" element={<SteamExplorer />} />
         <Route path="what-to-play" element={<WhatToPlay />} />
         <Route path="settings" element={<Settings />} />
       </Route>

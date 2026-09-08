@@ -1,5 +1,6 @@
 import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron'
 import {
+  ensureGameForSteamApp,
   getAllGamesWithSources,
   getDbFilePath,
   getGameWithSourcesById,
@@ -22,12 +23,17 @@ import {
   setHeroFromUrl
 } from './services/coverPickerService'
 import { getHltbForGame } from './services/hltbService'
+import { getRegionalPricing } from './services/regionalPricingService'
 import { launchGame } from './services/sessionTracker'
+import { syncSteamLibrary } from './services/steamLibraryService'
+import { searchSteamStore } from './services/steamStoreSearch'
 import { getThemeAudioForGame, setCustomThemeAudioFile } from './services/themeAudioService'
 import { translateToArabic } from './services/translationService'
 import { checkForUpdates, installUpdate, startDownloadUpdate } from './services/updateService'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 import type { GameDetail, TranslateDescriptionResult } from '../shared/models'
+
+const STEAM_APP_ID_PATTERN = /^\d{1,10}$/
 
 function getGameDetail(gameId: number): GameDetail | null {
   const game = getGameWithSourcesById(gameId)
@@ -192,6 +198,44 @@ export function registerIpcHandlers(): void {
       : await dialog.showOpenDialog(dialogOptions)
     if (result.canceled || result.filePaths.length === 0) return false
     return setCustomThemeAudioFile(gameId, result.filePaths[0])
+  })
+
+  ipcMain.handle(IPC_CHANNELS.STEAM_LIBRARY_SYNC, async (_event, rawInput: string) => {
+    if (typeof rawInput !== 'string') throw new Error('Invalid input')
+    return syncSteamLibrary(rawInput)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.STEAM_STORE_SEARCH, async (_event, term: string) => {
+    if (typeof term !== 'string') return []
+    return searchSteamStore(term)
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.STEAM_ENSURE_GAME_FOR_APP,
+    (_event, appId: string, title: string) => {
+      if (typeof appId !== 'string' || !STEAM_APP_ID_PATTERN.test(appId)) {
+        throw new Error('Invalid Steam AppID')
+      }
+      if (typeof title !== 'string' || !title.trim()) throw new Error('Invalid title')
+      return ensureGameForSteamApp(appId, title.trim())
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.STEAM_INSTALL_GAME, (_event, appId: string) => {
+    if (typeof appId !== 'string' || !STEAM_APP_ID_PATTERN.test(appId)) return false
+    shell.openExternal(`steam://install/${appId}`)
+    return true
+  })
+
+  ipcMain.handle(IPC_CHANNELS.STEAM_VIEW_IN_STORE, (_event, appId: string) => {
+    if (typeof appId !== 'string' || !STEAM_APP_ID_PATTERN.test(appId)) return false
+    shell.openExternal(`https://store.steampowered.com/app/${appId}`)
+    return true
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PRICING_GET_REGIONAL, async (_event, appId: string) => {
+    if (typeof appId !== 'string' || !STEAM_APP_ID_PATTERN.test(appId)) return null
+    return getRegionalPricing(appId)
   })
 
   ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_EXTERNAL, (_event, url: string) => {

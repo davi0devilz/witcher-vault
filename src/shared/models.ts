@@ -66,6 +66,44 @@ export interface ThemeAudioResult {
   source: ThemeAudioSource
 }
 
+export interface SteamLibrarySyncResult {
+  ok: boolean
+  message: string
+  personaName?: string
+  totalOwned?: number
+  newGames?: number
+  games?: Game[]
+}
+
+export interface SteamSearchResultItem {
+  appId: string
+  name: string
+  tinyImage: string | null
+  priceFinal: number | null
+  priceCurrency: string | null
+}
+
+export type RegionalPricingRegion = 'sa' | 'ua' | 'tr'
+
+export interface RegionalPrice {
+  region: RegionalPricingRegion
+  countryLabel: string
+  flag: string
+  currency: string
+  isFree: boolean
+  initial: number | null
+  final: number | null
+  discountPercent: number
+  sarEquivalent: number | null
+  approximate: boolean
+}
+
+export interface RegionalPricingResult {
+  available: boolean
+  isFree: boolean
+  prices: RegionalPrice[]
+}
+
 export interface GameSession {
   id: number
   gameId: number

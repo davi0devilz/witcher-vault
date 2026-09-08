@@ -267,6 +267,7 @@ function ReportBanner({ children }: { children: ReactNode }): JSX.Element {
 function GameCard({ game }: { game: Game }): JSX.Element {
   const hours = Math.floor(game.playtimeMinutes / 60)
   const primaryGenre = game.genres[0] ?? null
+  const isNotInstalled = game.installStatus === 'not_installed'
 
   return (
     <Link
@@ -274,15 +275,32 @@ function GameCard({ game }: { game: Game }): JSX.Element {
       className="group relative block aspect-[2/3] w-full overflow-hidden rounded-xl border border-base-border bg-base-surface transition-transform duration-300 ease-out hover:-translate-y-1 hover:shadow-glow motion-reduce:transition-none motion-reduce:hover:translate-y-0"
       title={game.title}
     >
-      {game.coverPath ? (
-        <img
-          src={`app-artwork://local/${game.coverPath}`}
-          alt={game.title}
-          loading="lazy"
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <FallbackPoster title={game.title} />
+      <div
+        className={
+          isNotInstalled
+            ? 'h-full w-full opacity-45 grayscale transition-all duration-300 group-hover:opacity-100 group-hover:grayscale-0'
+            : 'h-full w-full'
+        }
+      >
+        {game.coverPath ? (
+          <img
+            src={`app-artwork://local/${game.coverPath}`}
+            alt={game.title}
+            loading="lazy"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <FallbackPoster title={game.title} />
+        )}
+      </div>
+
+      {isNotInstalled && (
+        <span
+          title="مملوكة على Steam — غير مثبتة على هذا الجهاز"
+          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-sm backdrop-blur"
+        >
+          ☁️
+        </span>
       )}
 
       <div className="absolute inset-0 flex flex-col justify-end gap-1.5 bg-gradient-to-t from-black/95 via-black/50 to-transparent p-3 opacity-0 transition-opacity duration-300 motion-reduce:transition-none group-hover:opacity-100">

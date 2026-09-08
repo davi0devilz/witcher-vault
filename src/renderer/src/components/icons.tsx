@@ -63,6 +63,16 @@ export function SettingsIcon(props: IconProps): JSX.Element {
   )
 }
 
+export function CompassIcon(props: IconProps): JSX.Element {
+  return base(
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m15.5 8.5-2.1 5.1-5.1 2.1 2.1-5.1 5.1-2.1Z" />
+    </>,
+    props
+  )
+}
+
 export function XIcon(props: IconProps): JSX.Element {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" {...props}>

@@ -6,8 +6,11 @@ import type {
   Game,
   GameDetail,
   HltbResult,
+  RegionalPricingResult,
   ScanReport,
   SessionUpdate,
+  SteamLibrarySyncResult,
+  SteamSearchResultItem,
   ThemeAudioResult,
   TranslateDescriptionResult,
   UpdateEvent
@@ -80,6 +83,22 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.THEME_AUDIO_GET, gameId, title),
     setFromFile: (gameId: number): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.THEME_AUDIO_SET_FROM_FILE, gameId)
+  },
+  steam: {
+    syncLibrary: (rawInput: string): Promise<SteamLibrarySyncResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.STEAM_LIBRARY_SYNC, rawInput),
+    search: (term: string): Promise<SteamSearchResultItem[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.STEAM_STORE_SEARCH, term),
+    ensureGameForApp: (appId: string, title: string): Promise<number> =>
+      ipcRenderer.invoke(IPC_CHANNELS.STEAM_ENSURE_GAME_FOR_APP, appId, title),
+    installGame: (appId: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.STEAM_INSTALL_GAME, appId),
+    viewInStore: (appId: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.STEAM_VIEW_IN_STORE, appId)
+  },
+  pricing: {
+    getRegional: (appId: string): Promise<RegionalPricingResult | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PRICING_GET_REGIONAL, appId)
   },
   shell: {
     openExternal: (url: string): Promise<boolean> =>

@@ -206,7 +206,13 @@ export function upsertScannedGames(scanned: ScannedGame[]): UpsertResult {
       idStmt.free()
       newGames++
     } else {
-      db.run('UPDATE games SET updated_at = ? WHERE id = ?', [now, gameId])
+      // A game reaching this path was just found on disk by a local scanner —
+      // even if it was previously known only as an owned-but-uninstalled
+      // Steam library entry, it's installed now.
+      db.run("UPDATE games SET updated_at = ?, install_status = 'installed' WHERE id = ?", [
+        now,
+        gameId
+      ])
     }
 
     const findSourceStmt = db.prepare(
@@ -580,4 +586,104 @@ export function setGameThemeAudio(
     [fileName ? 'fetched' : 'unavailable', fileName, source, new Date().toISOString(), gameId]
   )
   persist()
+}
+
+/**
+ * Finds or creates the game+launch-source row for a Steam AppID without
+ * touching install/session state on an existing row — shared by the owned-
+ * library sync (bulk) and the Steam Explorer "open this game" flow (single).
+ * Returns the row's game id and whether a brand-new game row was created.
+ */
+function upsertSteamAppNoPersist(
+  appId: string,
+  title: string,
+  playtimeMinutes: number,
+  lastPlayedAt: string | null
+): { gameId: number; isNew: boolean } {
+  if (!db) throw new Error('Database not initialized')
+  const now = new Date().toISOString()
+
+  const findSourceStmt = db.prepare(
+    'SELECT game_id FROM launch_sources WHERE store = :store AND store_app_id = :appId'
+  )
+  findSourceStmt.bind({ ':store': 'steam', ':appId': appId })
+  if (findSourceStmt.step()) {
+    const gameId = findSourceStmt.getAsObject().game_id as number
+    findSourceStmt.free()
+    return { gameId, isNew: false }
+  }
+  findSourceStmt.free()
+
+  const normalized = normalizeTitle(title) || `steam-${appId}`
+  let gameId: number | null = null
+  let isPrimary = true
+  let isNew = false
+
+  const findGameStmt = db.prepare('SELECT id FROM games WHERE normalized_title = :n')
+  findGameStmt.bind({ ':n': normalized })
+  if (findGameStmt.step()) {
+    gameId = findGameStmt.getAsObject().id as number
+    isPrimary = false
+  }
+  findGameStmt.free()
+
+  if (gameId === null) {
+    db.run(
+      `INSERT INTO games
+        (normalized_title, title, install_status, playtime_minutes, last_played_at, is_favorite, created_at, updated_at)
+       VALUES (?, ?, 'not_installed', ?, ?, 0, ?, ?)`,
+      [normalized, title, playtimeMinutes, lastPlayedAt, now, now]
+    )
+    const idStmt = db.prepare('SELECT last_insert_rowid() AS id')
+    idStmt.step()
+    gameId = idStmt.getAsObject().id as number
+    idStmt.free()
+    isNew = true
+  }
+
+  db.run(
+    `INSERT INTO launch_sources
+      (game_id, store, store_app_id, raw_title, install_dir, executable_path, launch_command, is_primary, created_at, updated_at)
+     VALUES (?, 'steam', ?, ?, NULL, NULL, ?, ?, ?, ?)`,
+    [gameId, appId, title, `steam://run/${appId}`, isPrimary ? 1 : 0, now, now]
+  )
+
+  return { gameId, isNew }
+}
+
+/**
+ * Ensures a game row exists for a Steam Explorer result the user clicked on,
+ * so its detail page (artwork, HLTB, description, pricing...) works exactly
+ * like any owned game. Marks it not-installed only when brand new — an
+ * already-known game (installed or previously synced) is left untouched.
+ */
+export function ensureGameForSteamApp(appId: string, title: string): number {
+  const { gameId } = upsertSteamAppNoPersist(appId, title, 0, null)
+  persist()
+  return gameId
+}
+
+export interface OwnedSteamGame {
+  appId: string
+  title: string
+  playtimeMinutes: number
+  lastPlayedAt: string | null
+}
+
+export function upsertOwnedSteamGames(owned: OwnedSteamGame[]): { newGames: number } {
+  if (!db) throw new Error('Database not initialized')
+  let newGames = 0
+
+  for (const item of owned) {
+    const { isNew } = upsertSteamAppNoPersist(
+      item.appId,
+      item.title,
+      item.playtimeMinutes,
+      item.lastPlayedAt
+    )
+    if (isNew) newGames++
+  }
+
+  persist()
+  return { newGames }
 }

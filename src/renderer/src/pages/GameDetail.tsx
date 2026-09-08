@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import type { GameDetail as GameDetailModel, HltbResult, SessionUpdate } from '../../../shared/models'
+import type {
+  GameDetail as GameDetailModel,
+  HltbResult,
+  RegionalPricingResult,
+  SessionUpdate
+} from '../../../shared/models'
 import AmbientMusicPlayer from '../components/AmbientMusicPlayer'
 import CoverPickerModal from '../components/CoverPickerModal'
 
@@ -52,6 +57,8 @@ export default function GameDetail(): JSX.Element {
   const [isTranslating, setIsTranslating] = useState(false)
   const [translateError, setTranslateError] = useState<string | null>(null)
   const [hltb, setHltb] = useState<HltbResult | null>(null)
+  const [pricing, setPricing] = useState<RegionalPricingResult | null>(null)
+  const [isInstalling, setIsInstalling] = useState(false)
 
   const loadGame = useCallback(async () => {
     if (!Number.isFinite(gameId)) {
@@ -102,6 +109,27 @@ export default function GameDetail(): JSX.Element {
     }
   }, [game?.id, game?.title])
 
+  const steamAppId = game?.sources.find((s) => s.store === 'steam')?.storeAppId ?? null
+
+  useEffect(() => {
+    if (!steamAppId) {
+      setPricing(null)
+      return undefined
+    }
+    let cancelled = false
+    window.api.pricing
+      .getRegional(steamAppId)
+      .then((result) => {
+        if (!cancelled) setPricing(result)
+      })
+      .catch(() => {
+        // Regional pricing is a nice-to-have — never surfaced as an error.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [steamAppId])
+
   async function handleLaunch(): Promise<void> {
     setIsLaunching(true)
     setLaunchError(null)
@@ -111,6 +139,21 @@ export default function GameDetail(): JSX.Element {
     } finally {
       setIsLaunching(false)
     }
+  }
+
+  async function handleInstall(): Promise<void> {
+    if (!steamAppId) return
+    setIsInstalling(true)
+    try {
+      await window.api.steam.installGame(steamAppId)
+    } finally {
+      setIsInstalling(false)
+    }
+  }
+
+  async function handleViewInStore(): Promise<void> {
+    if (!steamAppId) return
+    await window.api.steam.viewInStore(steamAppId)
   }
 
   async function handleToggleFavorite(): Promise<void> {
@@ -205,18 +248,29 @@ export default function GameDetail(): JSX.Element {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={handleLaunch}
-              disabled={isLaunching || isTracking}
-              className="flex items-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-bold text-white shadow-glow transition-colors duration-200 hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isTracking
-                ? `▶ قيد اللعب الآن... ${session?.elapsedMinutes ?? 0} د`
-                : isLaunching
-                  ? 'جارِ التشغيل...'
-                  : '▶ تشغيل اللعبة'}
-            </button>
+            {game.installStatus === 'not_installed' ? (
+              <button
+                type="button"
+                onClick={handleInstall}
+                disabled={isInstalling || !steamAppId}
+                className="flex items-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-bold text-white shadow-glow transition-colors duration-200 hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isInstalling ? 'جارِ فتح Steam...' : '⬇ تثبيت اللعبة'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleLaunch}
+                disabled={isLaunching || isTracking}
+                className="flex items-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-bold text-white shadow-glow transition-colors duration-200 hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isTracking
+                  ? `▶ قيد اللعب الآن... ${session?.elapsedMinutes ?? 0} د`
+                  : isLaunching
+                    ? 'جارِ التشغيل...'
+                    : '▶ تشغيل اللعبة'}
+              </button>
+            )}
 
             <button
               type="button"
@@ -234,13 +288,25 @@ export default function GameDetail(): JSX.Element {
               🖼 تعديل الغلاف
             </button>
 
-            <button
-              type="button"
-              onClick={handleOpenInstallFolder}
-              className="flex items-center gap-2 rounded-xl border border-base-border bg-base-surface/80 px-4 py-3 text-sm font-bold text-white/80 transition-colors duration-200 hover:border-accent/40 hover:text-white"
-            >
-              📂 فتح مجلد التثبيت
-            </button>
+            {game.installStatus === 'installed' && (
+              <button
+                type="button"
+                onClick={handleOpenInstallFolder}
+                className="flex items-center gap-2 rounded-xl border border-base-border bg-base-surface/80 px-4 py-3 text-sm font-bold text-white/80 transition-colors duration-200 hover:border-accent/40 hover:text-white"
+              >
+                📂 فتح مجلد التثبيت
+              </button>
+            )}
+
+            {steamAppId && (
+              <button
+                type="button"
+                onClick={handleViewInStore}
+                className="flex items-center gap-2 rounded-xl border border-base-border bg-base-surface/80 px-4 py-3 text-sm font-bold text-white/80 transition-colors duration-200 hover:border-accent/40 hover:text-white"
+              >
+                🛒 عرض في متجر Steam
+              </button>
+            )}
           </div>
 
           {launchError && <p className="text-sm text-red-400">{launchError}</p>}
@@ -254,6 +320,7 @@ export default function GameDetail(): JSX.Element {
       </section>
 
       <HltbCard hltb={hltb} />
+      <RegionalPricingCard pricing={pricing} />
 
       <nav className="flex gap-1 border-b border-base-border">
         {TABS.map((tab) => (
@@ -400,7 +467,7 @@ export default function GameDetail(): JSX.Element {
       {isCoverModalOpen && (
         <CoverPickerModal
           gameId={gameId}
-          steamAppId={game.sources.find((s) => s.store === 'steam')?.storeAppId ?? null}
+          steamAppId={steamAppId}
           onClose={() => setIsCoverModalOpen(false)}
           onUpdated={loadGame}
         />
@@ -435,6 +502,70 @@ function HltbCard({ hltb }: { hltb: HltbResult | null }): JSX.Element | null {
           <p className="mt-1 text-xs text-white/40">⏳ {row.label}</p>
         </div>
       ))}
+    </div>
+  )
+}
+
+function formatMoney(amount: number, currency: string): string {
+  return `${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`
+}
+
+function RegionalPricingCard({ pricing }: { pricing: RegionalPricingResult | null }): JSX.Element | null {
+  if (!pricing || !pricing.available) return null
+
+  if (pricing.isFree) {
+    return (
+      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3 text-center">
+        <span className="font-tajawal text-sm font-bold text-emerald-300">🆓 لعبة مجانية</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-2xl border border-base-border bg-base-surface p-4">
+      <h3 className="mb-3 font-tajawal text-sm font-bold text-white">💰 مقارنة الأسعار الإقليمية</h3>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {pricing.prices.map((price) => (
+          <div
+            key={price.region}
+            className="rounded-xl border border-base-border bg-base-elevated p-3 text-center"
+          >
+            <p className="text-xs text-white/50">
+              {price.flag} {price.countryLabel}
+            </p>
+
+            {price.isFree ? (
+              <p className="mt-1.5 font-tajawal text-sm font-bold text-emerald-300">مجانية</p>
+            ) : (
+              <>
+                <div className="mt-1.5 flex items-center justify-center gap-2">
+                  {price.discountPercent > 0 && price.initial !== null && (
+                    <span className="text-xs text-white/35 line-through">
+                      {formatMoney(price.initial, price.currency)}
+                    </span>
+                  )}
+                  <span className="font-tajawal text-sm font-bold text-white">
+                    {price.final !== null ? formatMoney(price.final, price.currency) : 'غير متاح'}
+                  </span>
+                </div>
+                {price.discountPercent > 0 && (
+                  <span className="mt-1 inline-block rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-300">
+                    خصم {price.discountPercent}%
+                  </span>
+                )}
+                {price.sarEquivalent !== null && price.currency !== 'SAR' && (
+                  <p className="mt-1 text-[11px] text-white/40">
+                    ≈ {formatMoney(price.sarEquivalent, 'SAR')}
+                  </p>
+                )}
+                {price.approximate && (
+                  <p className="mt-1 text-[10px] text-white/25">سعر تقديري بالتحويل</p>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
