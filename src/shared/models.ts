@@ -38,9 +38,32 @@ export interface Game {
   isFavorite: boolean
   notes: string | null
   notesUpdatedAt: string | null
+  hltbStatus: HltbStatus
+  hltbMainSeconds: number | null
+  hltbMainExtraSeconds: number | null
+  hltbCompletionistSeconds: number | null
+  themeAudioStatus: ThemeAudioStatus
+  themeAudioPath: string | null
+  themeAudioSource: ThemeAudioSource
   createdAt: string
   updatedAt: string
   sources: LaunchSource[]
+}
+
+export type HltbStatus = 'pending' | 'fetched' | 'unavailable'
+
+export interface HltbResult {
+  mainSeconds: number | null
+  mainExtraSeconds: number | null
+  completionistSeconds: number | null
+}
+
+export type ThemeAudioStatus = 'pending' | 'fetched' | 'unavailable'
+export type ThemeAudioSource = 'khinsider' | 'custom' | null
+
+export interface ThemeAudioResult {
+  path: string | null
+  source: ThemeAudioSource
 }
 
 export interface GameSession {

@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import type { GameDetail as GameDetailModel, SessionUpdate } from '../../../shared/models'
+import type { GameDetail as GameDetailModel, HltbResult, SessionUpdate } from '../../../shared/models'
+import AmbientMusicPlayer from '../components/AmbientMusicPlayer'
 import CoverPickerModal from '../components/CoverPickerModal'
+
+function formatHltbHours(seconds: number | null): string | null {
+  if (seconds === null || seconds <= 0) return null
+  const hours = seconds / 3600
+  return `${hours % 1 === 0 ? hours.toFixed(0) : hours.toFixed(1)} ساعة`
+}
 
 type TabKey = 'about' | 'story' | 'progress' | 'notes'
 
@@ -44,6 +51,7 @@ export default function GameDetail(): JSX.Element {
   const [isLaunching, setIsLaunching] = useState(false)
   const [isTranslating, setIsTranslating] = useState(false)
   const [translateError, setTranslateError] = useState<string | null>(null)
+  const [hltb, setHltb] = useState<HltbResult | null>(null)
 
   const loadGame = useCallback(async () => {
     if (!Number.isFinite(gameId)) {
@@ -77,6 +85,22 @@ export default function GameDetail(): JSX.Element {
     })
     return unsubscribe
   }, [gameId, loadGame])
+
+  useEffect(() => {
+    if (!game) return
+    let cancelled = false
+    window.api.hltb
+      .getForGame(game.id, game.title)
+      .then((result) => {
+        if (!cancelled) setHltb(result)
+      })
+      .catch(() => {
+        // How-long-to-beat data is a nice-to-have — never surfaced as an error.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [game?.id, game?.title])
 
   async function handleLaunch(): Promise<void> {
     setIsLaunching(true)
@@ -229,6 +253,8 @@ export default function GameDetail(): JSX.Element {
         </div>
       </section>
 
+      <HltbCard hltb={hltb} />
+
       <nav className="flex gap-1 border-b border-base-border">
         {TABS.map((tab) => (
           <button
@@ -379,6 +405,36 @@ export default function GameDetail(): JSX.Element {
           onUpdated={loadGame}
         />
       )}
+
+      <AmbientMusicPlayer gameId={gameId} title={game.title} suspended={isTracking} />
+    </div>
+  )
+}
+
+function HltbCard({ hltb }: { hltb: HltbResult | null }): JSX.Element | null {
+  if (!hltb) return null
+
+  const rows: Array<{ label: string; value: string | null }> = [
+    { label: 'القصة الرئيسية', value: formatHltbHours(hltb.mainSeconds) },
+    { label: 'القصة + المهام الإضافية', value: formatHltbHours(hltb.mainExtraSeconds) },
+    { label: 'التختيم الكامل', value: formatHltbHours(hltb.completionistSeconds) }
+  ]
+
+  if (rows.every((r) => r.value === null)) return null
+
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {rows.map((row) => (
+        <div
+          key={row.label}
+          className="rounded-2xl border border-base-border bg-base-surface px-4 py-3 text-center"
+        >
+          <p className="font-tajawal text-base font-bold text-white">
+            {row.value ?? 'غير متاح'}
+          </p>
+          <p className="mt-1 text-xs text-white/40">⏳ {row.label}</p>
+        </div>
+      ))}
     </div>
   )
 }

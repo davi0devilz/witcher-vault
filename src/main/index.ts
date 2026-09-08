@@ -4,6 +4,7 @@ import { pathToFileURL } from 'url'
 import { initDatabase, persist } from './db'
 import { registerIpcHandlers } from './ipc'
 import { getArtworkCacheDir } from './services/artworkCache'
+import { getAudioCacheDir } from './services/audioCache'
 import { setSessionUpdateListener } from './services/sessionTracker'
 import { setUpdateEventListener } from './services/updateService'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
@@ -17,10 +18,15 @@ app.setPath('userData', join(app.getPath('appData'), 'game-vault'))
 app.setName('Witcher Vault')
 
 const ARTWORK_PROTOCOL = 'app-artwork'
+const AUDIO_PROTOCOL = 'app-audio'
 
 protocol.registerSchemesAsPrivileged([
   {
     scheme: ARTWORK_PROTOCOL,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true }
+  },
+  {
+    scheme: AUDIO_PROTOCOL,
     privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true }
   }
 ])
@@ -34,6 +40,15 @@ function registerArtworkProtocol(): void {
     // to a file directly inside the artwork cache directory.
     const fileName = basename(decodeURIComponent(url.pathname))
     const filePath = join(getArtworkCacheDir(), fileName)
+    return net.fetch(pathToFileURL(filePath).toString())
+  })
+}
+
+function registerAudioProtocol(): void {
+  protocol.handle(AUDIO_PROTOCOL, (request) => {
+    const url = new URL(request.url)
+    const fileName = basename(decodeURIComponent(url.pathname))
+    const filePath = join(getAudioCacheDir(), fileName)
     return net.fetch(pathToFileURL(filePath).toString())
   })
 }
@@ -77,6 +92,7 @@ app.whenReady().then(async () => {
   await initDatabase()
   registerIpcHandlers()
   registerArtworkProtocol()
+  registerAudioProtocol()
 
   createWindow()
 

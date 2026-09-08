@@ -5,8 +5,10 @@ import type {
   CoverOption,
   Game,
   GameDetail,
+  HltbResult,
   ScanReport,
   SessionUpdate,
+  ThemeAudioResult,
   TranslateDescriptionResult,
   UpdateEvent
 } from '../shared/models'
@@ -68,6 +70,16 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.HERO_SET_FROM_URL, gameId, url),
     setFromFile: (gameId: number): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.HERO_SET_FROM_FILE, gameId)
+  },
+  hltb: {
+    getForGame: (gameId: number, title: string): Promise<HltbResult | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.HLTB_GET_FOR_GAME, gameId, title)
+  },
+  themeAudio: {
+    get: (gameId: number, title: string): Promise<ThemeAudioResult | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.THEME_AUDIO_GET, gameId, title),
+    setFromFile: (gameId: number): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.THEME_AUDIO_SET_FROM_FILE, gameId)
   },
   shell: {
     openExternal: (url: string): Promise<boolean> =>

@@ -9,7 +9,7 @@ import type { ScannedGame } from './scanners/types'
 let db: Database | null = null
 let dbFilePath = ''
 
-const SCHEMA_VERSION = 5
+const SCHEMA_VERSION = 6
 
 function getSqlJsWasmPath(): string {
   // sql.js ships its .wasm binary alongside the CJS build in node_modules.
@@ -118,7 +118,16 @@ function ensureGamesArtworkColumns(): void {
     ['publisher', 'TEXT'],
     ['artwork_status', "TEXT NOT NULL DEFAULT 'pending'"],
     ['notes', 'TEXT'],
-    ['notes_updated_at', 'TEXT']
+    ['notes_updated_at', 'TEXT'],
+    ['hltb_status', "TEXT NOT NULL DEFAULT 'pending'"],
+    ['hltb_main_seconds', 'INTEGER'],
+    ['hltb_main_extra_seconds', 'INTEGER'],
+    ['hltb_completionist_seconds', 'INTEGER'],
+    ['hltb_checked_at', 'TEXT'],
+    ['theme_audio_status', "TEXT NOT NULL DEFAULT 'pending'"],
+    ['theme_audio_path', 'TEXT'],
+    ['theme_audio_source', 'TEXT'],
+    ['theme_audio_checked_at', 'TEXT']
   ]
 
   for (const [name, definition] of columnsToAdd) {
@@ -268,6 +277,13 @@ function mapGameRow(row: Record<string, unknown>): Game {
     isFavorite: Boolean(row.is_favorite),
     notes: (row.notes as string | null) ?? null,
     notesUpdatedAt: (row.notes_updated_at as string | null) ?? null,
+    hltbStatus: (row.hltb_status as Game['hltbStatus']) ?? 'pending',
+    hltbMainSeconds: (row.hltb_main_seconds as number | null) ?? null,
+    hltbMainExtraSeconds: (row.hltb_main_extra_seconds as number | null) ?? null,
+    hltbCompletionistSeconds: (row.hltb_completionist_seconds as number | null) ?? null,
+    themeAudioStatus: (row.theme_audio_status as Game['themeAudioStatus']) ?? 'pending',
+    themeAudioPath: (row.theme_audio_path as string | null) ?? null,
+    themeAudioSource: (row.theme_audio_source as Game['themeAudioSource']) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     sources: []
@@ -513,5 +529,55 @@ export function updateGameArtwork(gameId: number, update: ArtworkUpdate): void {
     ]
   )
 
+  persist()
+}
+
+export interface HltbUpdate {
+  mainSeconds: number | null
+  mainExtraSeconds: number | null
+  completionistSeconds: number | null
+}
+
+export function updateGameHltb(gameId: number, update: HltbUpdate | null): void {
+  if (!db) throw new Error('Database not initialized')
+  const now = new Date().toISOString()
+  const found = update !== null && (update.mainSeconds !== null || update.mainExtraSeconds !== null || update.completionistSeconds !== null)
+
+  db.run(
+    `UPDATE games SET
+       hltb_status = ?,
+       hltb_main_seconds = ?,
+       hltb_main_extra_seconds = ?,
+       hltb_completionist_seconds = ?,
+       hltb_checked_at = ?
+     WHERE id = ?`,
+    [
+      found ? 'fetched' : 'unavailable',
+      update?.mainSeconds ?? null,
+      update?.mainExtraSeconds ?? null,
+      update?.completionistSeconds ?? null,
+      now,
+      gameId
+    ]
+  )
+
+  persist()
+}
+
+export function setGameThemeAudio(
+  gameId: number,
+  fileName: string | null,
+  source: 'khinsider' | 'custom' | null
+): void {
+  if (!db) throw new Error('Database not initialized')
+  db.run(
+    `UPDATE games SET
+       theme_audio_status = ?,
+       theme_audio_path = ?,
+       theme_audio_source = ?,
+       theme_audio_checked_at = ?
+     WHERE id = ?`,
+    [fileName ? 'fetched' : 'unavailable', fileName, source, new Date().toISOString(), gameId]
+  )
   persist()
 }

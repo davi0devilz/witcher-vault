@@ -21,7 +21,9 @@ import {
   setHeroFromLocalFile,
   setHeroFromUrl
 } from './services/coverPickerService'
+import { getHltbForGame } from './services/hltbService'
 import { launchGame } from './services/sessionTracker'
+import { getThemeAudioForGame, setCustomThemeAudioFile } from './services/themeAudioService'
 import { translateToArabic } from './services/translationService'
 import { checkForUpdates, installUpdate, startDownloadUpdate } from './services/updateService'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
@@ -168,6 +170,28 @@ export function registerIpcHandlers(): void {
     const filePath = await pickImageFile(event, 'اختر صورة البانوراما')
     if (!filePath) return false
     return setHeroFromLocalFile(gameId, filePath)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.HLTB_GET_FOR_GAME, async (_event, gameId: number, title: string) =>
+    getHltbForGame(gameId, title)
+  )
+
+  ipcMain.handle(IPC_CHANNELS.THEME_AUDIO_GET, async (_event, gameId: number, title: string) =>
+    getThemeAudioForGame(gameId, title)
+  )
+
+  ipcMain.handle(IPC_CHANNELS.THEME_AUDIO_SET_FROM_FILE, async (event, gameId: number) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    const dialogOptions: Electron.OpenDialogOptions = {
+      title: 'اختر مقطعاً صوتياً',
+      properties: ['openFile'],
+      filters: [{ name: 'ملفات صوتية', extensions: ['mp3'] }]
+    }
+    const result = window
+      ? await dialog.showOpenDialog(window, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions)
+    if (result.canceled || result.filePaths.length === 0) return false
+    return setCustomThemeAudioFile(gameId, result.filePaths[0])
   })
 
   ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_EXTERNAL, (_event, url: string) => {
