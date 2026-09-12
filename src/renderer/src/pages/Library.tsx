@@ -3,6 +3,19 @@ import { Link } from 'react-router-dom'
 import type { ArtworkBatchResult, Game, ScanReport } from '../../../shared/models'
 import FallbackPoster from '../components/FallbackPoster'
 import { PlayIcon } from '../components/icons'
+import LibraryCarousel from '../components/LibraryCarousel'
+
+type ViewMode = 'grid' | 'carousel'
+
+const VIEW_MODE_KEY = 'library.viewMode'
+
+function readStoredViewMode(): ViewMode {
+  try {
+    return localStorage.getItem(VIEW_MODE_KEY) === 'carousel' ? 'carousel' : 'grid'
+  } catch {
+    return 'grid'
+  }
+}
 
 const STORE_LABELS: Record<Game['sources'][number]['store'], string> = {
   steam: 'Steam',
@@ -38,6 +51,15 @@ export default function Library(): JSX.Element {
   const [genreFilter, setGenreFilter] = useState('all')
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
   const [sortMode, setSortMode] = useState<SortMode>('recent')
+  const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, viewMode)
+    } catch {
+      // Best-effort persistence only.
+    }
+  }, [viewMode])
 
   useEffect(() => {
     let cancelled = false
@@ -145,7 +167,35 @@ export default function Library(): JSX.Element {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-xl border border-base-border bg-base-surface p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              title="عرض شبكي"
+              className={[
+                'flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold transition-colors duration-200',
+                viewMode === 'grid'
+                  ? 'bg-accent text-white shadow-glow'
+                  : 'text-white/55 hover:bg-white/10 hover:text-white'
+              ].join(' ')}
+            >
+              🔲 شبكي
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('carousel')}
+              title="عرض سينمائي"
+              className={[
+                'flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold transition-colors duration-200',
+                viewMode === 'carousel'
+                  ? 'bg-accent text-white shadow-glow'
+                  : 'text-white/55 hover:bg-white/10 hover:text-white'
+              ].join(' ')}
+            >
+              🎬 سينمائي
+            </button>
+          </div>
           <button
             type="button"
             onClick={handleFetchArtwork}
@@ -265,13 +315,15 @@ export default function Library(): JSX.Element {
         </div>
       )}
 
-      {visibleGames.length > 0 && (
+      {visibleGames.length > 0 && viewMode === 'grid' && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {visibleGames.map((game) => (
             <GameCard key={game.id} game={game} />
           ))}
         </div>
       )}
+
+      {visibleGames.length > 0 && viewMode === 'carousel' && <LibraryCarousel games={visibleGames} />}
     </div>
   )
 }
@@ -324,7 +376,7 @@ function GameCard({ game }: { game: Game }): JSX.Element {
             alt={game.title}
             loading="lazy"
             onError={() => setCoverFailed(true)}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
           />
         ) : (
           <FallbackPoster title={game.title} />

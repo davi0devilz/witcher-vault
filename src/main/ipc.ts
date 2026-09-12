@@ -30,7 +30,7 @@ import { syncSteamLibrary } from './services/steamLibraryService'
 import { searchSteamStore } from './services/steamStoreSearch'
 import { getThemeAudioForGame, setCustomThemeAudioFile } from './services/themeAudioService'
 import { translateToArabic } from './services/translationService'
-import { checkForUpdates, installUpdate, startDownloadUpdate } from './services/updateService'
+import { checkForUpdates, installUpdate, openReleasePage, startDownloadUpdate } from './services/updateService'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 import type { GameDetail, TranslateDescriptionResult } from '../shared/models'
 
@@ -192,8 +192,8 @@ export function registerIpcHandlers(): void {
     getHltbForGame(gameId, title)
   )
 
-  ipcMain.handle(IPC_CHANNELS.THEME_AUDIO_GET, async (_event, gameId: number, title: string) =>
-    getThemeAudioForGame(gameId, title)
+  ipcMain.handle(IPC_CHANNELS.THEME_AUDIO_GET, async (_event, gameId: number, title: string, forceRefresh: unknown) =>
+    getThemeAudioForGame(gameId, title, forceRefresh === true)
   )
 
   ipcMain.handle(IPC_CHANNELS.THEME_AUDIO_SET_FROM_FILE, async (event, gameId: number) => {
@@ -259,4 +259,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.UPDATE_START_DOWNLOAD, () => startDownloadUpdate())
 
   ipcMain.handle(IPC_CHANNELS.UPDATE_INSTALL, () => installUpdate())
+
+  ipcMain.handle(IPC_CHANNELS.UPDATE_OPEN_RELEASE_PAGE, (_event, version: string) => {
+    if (typeof version !== 'string' || !/^\d+\.\d+\.\d+/.test(version)) return false
+    openReleasePage(version)
+    return true
+  })
 }

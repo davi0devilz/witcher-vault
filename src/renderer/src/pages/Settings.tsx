@@ -27,7 +27,7 @@ type UpdateState =
   | { phase: 'idle' }
   | { phase: 'checking' }
   | { phase: 'up-to-date' }
-  | { phase: 'available'; version: string }
+  | { phase: 'available'; version: string; isPortable: boolean }
   | { phase: 'downloading'; version: string; percent: number }
   | { phase: 'downloaded'; version: string }
   | { phase: 'error'; message: string }
@@ -104,7 +104,7 @@ export default function Settings(): JSX.Element {
           case 'checking-for-update':
             return { phase: 'checking' }
           case 'update-available':
-            return { phase: 'available', version: event.version }
+            return { phase: 'available', version: event.version, isPortable: event.isPortable }
           case 'update-not-available':
             return { phase: 'up-to-date' }
           case 'download-progress': {
@@ -132,6 +132,11 @@ export default function Settings(): JSX.Element {
     if (updateState.phase !== 'available') return
     setUpdateState({ phase: 'downloading', version: updateState.version, percent: 0 })
     await window.api.updater.startDownload()
+  }
+
+  async function handleDownloadPortable(): Promise<void> {
+    if (updateState.phase !== 'available') return
+    await window.api.updater.openReleasePage(updateState.version)
   }
 
   function handleDismissUpdate(): void {
@@ -406,13 +411,23 @@ export default function Settings(): JSX.Element {
               يمكنك تحميل التحديث الآن أو تجاهله والمتابعة لاحقاً.
             </p>
             <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={handleStartDownload}
-                className="rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-accent-soft"
-              >
-                تحديث الآن
-              </button>
+              {updateState.isPortable ? (
+                <button
+                  type="button"
+                  onClick={handleDownloadPortable}
+                  className="rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-accent-soft"
+                >
+                  ⬇ تحميل الإصدار الجديد
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleStartDownload}
+                  className="rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-accent-soft"
+                >
+                  تحديث الآن
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleDismissUpdate}
@@ -421,6 +436,12 @@ export default function Settings(): JSX.Element {
                 لاحقاً / تجاهل
               </button>
             </div>
+            {updateState.isPortable && (
+              <p className="mt-2 text-[11px] text-white/35">
+                النسخة المحمولة (Portable) لا تدعم التحديث التلقائي داخل التطبيق — سيتم فتح صفحة
+                الإصدار على GitHub لتحميل الملف الجديد يدوياً.
+              </p>
+            )}
           </div>
         )}
 

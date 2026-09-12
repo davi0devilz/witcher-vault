@@ -7,7 +7,7 @@ import { getArtworkCacheDir } from './services/artworkCache'
 import { getAudioCacheDir } from './services/audioCache'
 import { setSessionUpdateListener } from './services/sessionTracker'
 import { runSilentBackgroundSync } from './services/steamLibraryService'
-import { setUpdateEventListener } from './services/updateService'
+import { checkForUpdatesSilently, setUpdateEventListener } from './services/updateService'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 
 // Electron derives the userData storage folder from the app name by default.
@@ -104,6 +104,11 @@ app.whenReady().then(async () => {
   setUpdateEventListener((update) => {
     mainWindow?.webContents.send(IPC_CHANNELS.UPDATE_EVENT, update)
   })
+
+  // Fire-and-forget, packaged builds only: the listener above is already
+  // wired, so whatever this finds reaches the renderer's update banner the
+  // same way a manual "check for updates" click would.
+  checkForUpdatesSilently()
 
   // Fire-and-forget: never blocks window creation, never surfaces an error
   // dialog. A no-op when no Steam profile has been configured yet.

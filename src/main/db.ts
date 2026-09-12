@@ -88,6 +88,7 @@ export async function initDatabase(): Promise<void> {
   ensureGamesArtworkColumns()
   ensureOwnershipMigration()
   ensureThemeAudioRetryMigration()
+  ensureThemeAudioFallbackV2Migration()
 
   db.run(
     `INSERT INTO meta (key, value) VALUES ('schema_version', ?)
@@ -204,6 +205,26 @@ function ensureThemeAudioRetryMigration(): void {
   db.run("UPDATE games SET theme_audio_status = 'pending' WHERE theme_audio_status = 'unavailable'")
 
   setMeta(THEME_AUDIO_RETRY_MIGRATION_META_KEY, '1')
+}
+
+const THEME_AUDIO_FALLBACK_V2_MIGRATION_META_KEY = 'theme_audio_fallback_v2_migration_done'
+
+/**
+ * Same one-time reset as above, run again for the pipeline's second
+ * expansion: Steam-trailer lookup by title search (for games with no linked
+ * Steam source), a YouTube/Invidious tier, and a local install-folder scan.
+ * Games permanently marked "unavailable" under the pre-v2 pipeline — e.g.
+ * "The Blood of Dawnwalker", added manually with no Steam source and no
+ * KHInsider album — get exactly one fresh attempt under the full tier chain
+ * the next time their detail page opens.
+ */
+function ensureThemeAudioFallbackV2Migration(): void {
+  if (!db) return
+  if (getMeta(THEME_AUDIO_FALLBACK_V2_MIGRATION_META_KEY)) return
+
+  db.run("UPDATE games SET theme_audio_status = 'pending' WHERE theme_audio_status = 'unavailable'")
+
+  setMeta(THEME_AUDIO_FALLBACK_V2_MIGRATION_META_KEY, '1')
 }
 
 export function persist(): void {
@@ -661,7 +682,7 @@ export function updateGameHltb(gameId: number, update: HltbUpdate | null): void 
 export function setGameThemeAudio(
   gameId: number,
   fileName: string | null,
-  source: 'khinsider' | 'custom' | null
+  source: 'khinsider' | 'steam-movie' | 'youtube' | 'local-install' | 'custom' | null
 ): void {
   if (!db) throw new Error('Database not initialized')
   db.run(

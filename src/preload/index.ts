@@ -85,8 +85,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.HLTB_GET_FOR_GAME, gameId, title)
   },
   themeAudio: {
-    get: (gameId: number, title: string): Promise<ThemeAudioResult | null> =>
-      ipcRenderer.invoke(IPC_CHANNELS.THEME_AUDIO_GET, gameId, title),
+    get: (gameId: number, title: string, forceRefresh = false): Promise<ThemeAudioResult | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.THEME_AUDIO_GET, gameId, title, forceRefresh),
     setFromFile: (gameId: number): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.THEME_AUDIO_SET_FROM_FILE, gameId)
   },
@@ -120,6 +120,8 @@ const api = {
     checkForUpdates: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_CHECK),
     startDownload: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_START_DOWNLOAD),
     installUpdate: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_INSTALL),
+    openReleasePage: (version: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.UPDATE_OPEN_RELEASE_PAGE, version),
     onUpdateEvent: (callback: (event: UpdateEvent) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, update: UpdateEvent): void =>
         callback(update)

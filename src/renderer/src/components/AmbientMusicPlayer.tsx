@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ThemeAudioSource } from '../../../shared/models'
 
 const MUTED_KEY = 'ambientMusic.muted'
 const VOLUME_KEY = 'ambientMusic.volume'
@@ -35,7 +36,7 @@ export default function AmbientMusicPlayer({
   const fadeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const [trackPath, setTrackPath] = useState<string | null>(null)
-  const [source, setSource] = useState<'khinsider' | 'custom' | null>(null)
+  const [source, setSource] = useState<ThemeAudioSource>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [muted, setMuted] = useState(readStoredMuted)
   const [volume, setVolume] = useState(readStoredVolume)
@@ -135,10 +136,29 @@ export default function AmbientMusicPlayer({
     }
   }, [volume])
 
+  // Leaving the page (or the game switching under us) unmounts this
+  // component entirely — fading out here, rather than cutting the volume
+  // instantly, avoids an abrupt pop. The interval is deliberately left
+  // running past unmount: the <audio> element itself lives on in memory
+  // (only detached from the DOM) until this closure is garbage-collected,
+  // so it keeps playing — quietly — for the fade's short remaining life.
   useEffect(() => {
     return () => {
+      const audio = audioRef.current
       clearFade()
-      audioRef.current?.pause()
+      if (!audio || audio.paused) return
+      const steps = 12
+      const stepMs = 350 / steps
+      const start = audio.volume
+      let step = 0
+      const timer = setInterval(() => {
+        step += 1
+        audio.volume = Math.max(0, start * (1 - step / steps))
+        if (step >= steps) {
+          clearInterval(timer)
+          audio.pause()
+        }
+      }, stepMs)
     }
   }, [])
 
@@ -150,6 +170,19 @@ export default function AmbientMusicPlayer({
       const result = await window.api.themeAudio.get(gameId, title)
       setTrackPath(result?.path ?? null)
       setSource(result?.source ?? null)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function handleRetry(): Promise<void> {
+    setIsLoading(true)
+    try {
+      const result = await window.api.themeAudio.get(gameId, title, true)
+      setTrackPath(result?.path ?? null)
+      setSource(result?.source ?? null)
+    } catch {
+      // Silently treated as "no track available" — never surfaced to the user.
     } finally {
       setIsLoading(false)
     }
@@ -167,15 +200,32 @@ export default function AmbientMusicPlayer({
 
       {showPanel && (
         <div className="w-64 rounded-2xl border border-base-border bg-base-surface/95 p-4 text-sm text-white/80 shadow-xl backdrop-blur">
-          <p className="mb-3 font-tajawal text-xs font-bold text-white/70">
-            🎶 موسيقى الأجواء
-          </p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="font-tajawal text-xs font-bold text-white/70">🎶 موسيقى الأجواء</p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              disabled={isLoading}
+              title="إعادة البحث عن مقطع صوتي"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-sm text-white/50 transition-colors duration-200 hover:bg-white/10 hover:text-white disabled:cursor-wait disabled:opacity-40"
+            >
+              <span className={isLoading ? 'inline-block animate-spin' : undefined}>🔄</span>
+            </button>
+          </div>
 
           {hasTrack ? (
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-white/50">
-                  {source === 'custom' ? 'مقطع مخصص' : 'مقطع تلقائي'}
+                  {source === 'custom'
+                    ? 'مقطع مخصص'
+                    : source === 'steam-movie'
+                      ? 'مقطع من عرض ترويجي (Steam)'
+                      : source === 'youtube'
+                        ? 'مقطع من يوتيوب'
+                        : source === 'local-install'
+                          ? 'مقطع من ملفات اللعبة المثبتة'
+                          : 'مقطع تلقائي'}
                 </span>
                 <button
                   type="button"

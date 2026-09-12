@@ -36,5 +36,6 @@ export const IPC_CHANNELS = {
   UPDATE_CHECK: 'update:check-for-updates',
   UPDATE_START_DOWNLOAD: 'update:start-download-update',
   UPDATE_INSTALL: 'update:install-update',
+  UPDATE_OPEN_RELEASE_PAGE: 'update:open-release-page',
   UPDATE_EVENT: 'update:event'
 } as const

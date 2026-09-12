@@ -21,6 +21,12 @@ interface SteamAppDetailsEntry {
     screenshots?: Array<{ path_full?: string }>
     is_free?: boolean
     price_overview?: { currency: string; final: number }
+    movies?: Array<{
+      webm?: { '480'?: string; max?: string }
+      mp4?: { '480'?: string; max?: string }
+      dash_h264?: string
+      dash_av1?: string
+    }>
   }
 }
 
@@ -115,6 +121,37 @@ export async function fetchSteamStoreImages(appId: string): Promise<SteamStoreIm
     headerImage: data.header_image ?? null,
     screenshots: (data.screenshots ?? []).map((s) => s.path_full).filter((url): url is string => Boolean(url))
   }
+}
+
+export interface SteamMovieEntry {
+  /** Direct progressive video URLs — present only on older store trailers. */
+  webm480: string | null
+  mp4480: string | null
+  webmMax: string | null
+  mp4Max: string | null
+  /** DASH manifest URL — how virtually every current Steam trailer is served. */
+  dashManifestUrl: string | null
+}
+
+/**
+ * Lists a Steam AppID's store trailers, in the order Steam returns them
+ * (first is the storefront's featured/highlight trailer). Each entry
+ * surfaces whatever the store actually gives for it: legacy direct
+ * webm/mp4 links on older catalog entries, or — for essentially every
+ * current trailer — only a DASH manifest URL, which callers extracting
+ * just the audio track need to resolve via `extractDashAudioTrack`.
+ */
+export async function fetchSteamMovies(appId: string): Promise<SteamMovieEntry[]> {
+  const data = await requestAppDetails(appId, 'english', { filters: 'basic,movies' })
+  if (!data?.movies?.length) return []
+
+  return data.movies.map((movie) => ({
+    webm480: movie.webm?.['480'] ?? null,
+    mp4480: movie.mp4?.['480'] ?? null,
+    webmMax: movie.webm?.max ?? null,
+    mp4Max: movie.mp4?.max ?? null,
+    dashManifestUrl: movie.dash_h264 ?? movie.dash_av1 ?? null
+  }))
 }
 
 export interface SimplePrice {

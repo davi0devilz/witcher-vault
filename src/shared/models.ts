@@ -60,7 +60,13 @@ export interface HltbResult {
 }
 
 export type ThemeAudioStatus = 'pending' | 'fetched' | 'unavailable'
-export type ThemeAudioSource = 'khinsider' | 'custom' | null
+export type ThemeAudioSource =
+  | 'khinsider'
+  | 'steam-movie'
+  | 'youtube'
+  | 'local-install'
+  | 'custom'
+  | null
 
 export interface ThemeAudioResult {
   path: string | null
@@ -183,7 +189,7 @@ export interface TranslateDescriptionResult {
 
 export type UpdateEvent =
   | { type: 'checking-for-update' }
-  | { type: 'update-available'; version: string }
+  | { type: 'update-available'; version: string; isPortable: boolean }
   | { type: 'update-not-available' }
   | { type: 'download-progress'; percent: number }
   | { type: 'update-downloaded'; version: string }
